@@ -1,4 +1,4 @@
-# 🕵️ AI API Scam Detector
+# 🕵️ APIScamHunter
 
 **Find out if the "cheap Claude / GPT API key" you bought is actually a man-in-the-middle
 proxy that intercepts, rewrites and degrades your traffic.**
@@ -78,7 +78,7 @@ The script runs four probes and prints a verdict:
 ## 🤖 Use it as a Claude Code skill
 
 [`SKILL.md`](SKILL.md) is a ready-to-use [Claude Code](https://claude.com/claude-code) skill.
-Drop the folder into `~/.claude/skills/ai-api-scam-detector/` and Claude will trigger it
+Drop the folder into `~/.claude/skills/api-scam-hunter/` and Claude will trigger it
 automatically when you ask things like *"I bought a third-party API key, is it legit?"*
 
 ## License

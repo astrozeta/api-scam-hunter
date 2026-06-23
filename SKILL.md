@@ -1,5 +1,5 @@
 ---
-name: ai-api-scam-detector
+name: api-scam-hunter
 description: >
   Detects whether a purchased AI API key/endpoint (Claude/Anthropic, OpenAI, etc.) — often
   bought cheap from a reseller or marketplace like GamsGo — is actually a man-in-the-middle
@@ -11,7 +11,7 @@ description: >
   Claude/GPT". Use it to verify endpoint authenticity and gather evidence to dispute/report.
 ---
 
-# AI API Scam Detector
+# APIScamHunter
 
 Verify whether third-party AI API access (Claude, GPT, etc.) is legitimate or a proxy that
 sits in the middle, reads your traffic, and degrades the service. Defensive use only.
