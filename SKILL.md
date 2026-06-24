@@ -80,6 +80,25 @@ scripts/check-api.sh  <url> <key>                       # macOS/Linux
    payment chargeback, and a community warning. **Never** attack their systems — it ruins
    the case and puts you in the wrong.
 
+## The grey market behind "cheap keys"
+These bargain endpoints are known in China as 中转站 ("transfer stations" / shadow APIs),
+sold on GitHub, Taobao and Telegram at ~10% of official price. A 2026 CISPA Helmholtz audit
+("Real Money, Fake Models", arXiv:2603.01919) of 17 such services found widespread model
+substitution — you pay for Opus and get Haiku or a relabelled Qwen. One endpoint sold as
+"Gemini-2.5" scored 37% on a medical benchmark vs ~84% for the official API. Anthropic
+reported a single proxy network running 20,000+ fraudulent accounts. The business model
+rests on three legs: **stolen credentials + model substitution + harvesting your prompts**
+(resold as training data).
+
+### Vet the reseller's reputation (before paying)
+- Search community rankings/listings: GitHub `awesome-ai-proxy` / `中转站` lists, Zhihu,
+  apiranking.com, aiapipk.com.
+- Search the **internal** search of closed forums — linux.do, NodeSeek, V2EX — many 跑路
+  ("ran away with the balance") threads are login-only and never hit Google.
+- **No community footprint = no verifiable reputation = treat as high risk.**
+- Forum consensus on the whole category: any station can 跑路 overnight. Never prepay large
+  amounts; top up only what you'll use — and never route anything sensitive through it.
+
 ## Golden rule
 Legit model access always goes to the official domain with an official-format key. Any
 "cheap alternative BASE_URL" is, at minimum, a middleman that sees all your traffic.

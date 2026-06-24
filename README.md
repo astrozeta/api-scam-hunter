@@ -68,6 +68,26 @@ The script runs four probes and prints a verdict:
 > reads, edits and degrades your traffic**, with no guarantee they keep serving the real
 > model tomorrow. **Never send secrets through such an endpoint.**
 
+## 🌏 The grey market behind it
+
+These cheap endpoints are a known economy — in China, 中转站 ("transfer stations" / shadow
+APIs) sold at ~10% of official price. They're not all equally bad, but the risk is
+*structural*, not per-vendor:
+
+- A 2026 **CISPA Helmholtz** audit ([*Real Money, Fake Models*](https://arxiv.org/abs/2603.01919))
+  of **17** such services found widespread **model substitution** — pay for Opus, get Haiku
+  or a relabelled Qwen. One "Gemini-2.5" endpoint scored **37%** on a medical benchmark vs
+  **~84%** for the official API.
+- Anthropic reported a single proxy network running **20,000+ fraudulent accounts**.
+- The model rests on three legs: **stolen credentials + model substitution + harvesting
+  your prompts** (resold as training data).
+
+**Vetting a reseller?** Check community rankings (GitHub `awesome-ai-proxy` lists, Zhihu,
+apiranking.com) and the *internal* search of closed forums (linux.do, NodeSeek, V2EX) — most
+跑路 ("ran off with the balance") threads are login-only. **No community footprint = no
+verifiable reputation.** And the forum consensus on the whole category: never prepay large
+amounts.
+
 ## ✅ If you confirm a scam
 
 1. **Stop using it for anything sensitive** immediately.
