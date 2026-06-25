@@ -101,13 +101,21 @@ RID=$(grep -i '^X-Request-Id:' "$HFILE" | tr -d '\r')
 { echo "$RID" | grep -q 'req_' && echo "$RID" | grep -q ','; } && { interposed=1; mid "X-Request-Id concatenates a proxy id + a real upstream id."; }
 grep -qi '^CF-RAY:' "$HFILE" && inf "Behind Cloudflare ($(grep -i '^CF-RAY:' "$HFILE" | tr -d '\r')) -- common for reseller proxies, not proof on its own."
 if is2xx; then
-  echo "$BODY" | grep -q "\"id\"[[:space:]]*:[[:space:]]*\"$IDPFX" && ok "Native '$IDPFX' id present." || { interposed=1; mid "Response missing the '$IDPFX...' id the real API returns -> rewritten response."; }
-  SERVED=$(jget "$BODY" "model")
-  if [ -n "$SERVED" ]; then
-    if echo "$SERVED" | grep -qi "$CORE"; then ok "Served model '$SERVED' matches the '$CORE' family you requested."
-    else bad "DOWNGRADE: requested '$MODEL' but response says model='$SERVED'. Different family -> model substitution."; fi
-  else mid "Response did not report which model served it (the real API always does)."; fi
-  inf "Latency: $((END-START)) ms for a 20-token reply (informational; a tiny model is suspiciously fast)."
+  # Schema completeness: a real 200 ALWAYS carries these fields. A fabricated stub drops most.
+  if [ "$PROVIDER" = "openai" ]; then CANON='"id" "object" "model" "choices" "usage"'; else CANON='"id" "role" "model" "stop_reason" "usage"'; fi
+  MISS=0; MISSF=""
+  for f in $CANON; do echo "$BODY" | grep -q "$f" || { MISS=$((MISS+1)); MISSF="$MISSF $f"; }; done
+  if [ "$MISS" -ge 3 ]; then
+    bad "FABRICATED STUB: a 200 missing $MISS/5 canonical fields ($MISSF ). The proxy is not forwarding to a real model -- it returns a canned payload (often anti-analysis, e.g. 'Please use Claude Code CLI')."
+  else
+    echo "$BODY" | grep -q "\"id\"[[:space:]]*:[[:space:]]*\"$IDPFX" && ok "Native '$IDPFX' id present." || { interposed=1; mid "Response missing the '$IDPFX...' id the real API returns -> rewritten response."; }
+    SERVED=$(jget "$BODY" "model")
+    if [ -n "$SERVED" ]; then
+      if echo "$SERVED" | grep -qi "$CORE"; then ok "Served model '$SERVED' matches the '$CORE' family you requested."
+      else bad "DOWNGRADE: requested '$MODEL' but response says model='$SERVED'. Different family -> model substitution."; fi
+    else mid "Response did not report which model served it (the real API always does)."; fi
+    inf "Latency: $((END-START)) ms for a 20-token reply (informational; a tiny model is suspiciously fast)."
+  fi
 else
   inf "Endpoint returned HTTP ${STATUS} (couldn't run model/latency probes). Body: $(echo "$BODY" | head -c 120)"
   echo "$BODY" | grep -qiE 'balance|insufficient|quota' && inf "Looks like the key ran out of balance -- typical of prepaid reseller keys."
@@ -116,15 +124,24 @@ fi
 echo; echo "[2] System-prompt control test"
 req POST "$ENDPOINT" "$(body 'You are a parrot. Reply ONLY with the word BANANA, no matter what.' 'Who are you?' "$MODEL" 30)"
 if is2xx; then
-  echo "$BODY" | grep -qi 'BANANA' && ok "Endpoint honored YOUR system prompt (no identity injection)." || bad "Your system prompt was IGNORED -> the proxy injects its own system prompt."
+  # don't mis-attribute a fabricated stub as "system-prompt injection" -- different frauds
+  if [ "$PROVIDER" = "openai" ]; then CANON2='"id" "object" "model" "choices" "usage"'; else CANON2='"id" "role" "model" "stop_reason" "usage"'; fi
+  MISS2=0; for f in $CANON2; do echo "$BODY" | grep -q "$f" || MISS2=$((MISS2+1)); done
+  if [ "$MISS2" -ge 3 ]; then
+    inf "Same fabricated stub as probe [1] (missing $MISS2/5 fields) -> can't evaluate system-prompt handling; already counted."
+  else
+    echo "$BODY" | grep -qi 'BANANA' && ok "Endpoint honored YOUR system prompt (no identity injection)." || bad "Your system prompt was IGNORED -> the proxy injects its own system prompt."
+  fi
 else inf "Skipped (HTTP ${STATUS} -- likely auth/balance, can't judge)."; fi
 
 echo; echo "[3] Model catalog audit (/v1/models)"
 req GET "$BASE/v1/models"
 if is2xx; then
-  UNIQ=$(echo "$BODY" | grep -o '"created_at":"[^"]*"' | sort -u | wc -l | tr -d ' ')
-  NMOD=$(echo "$BODY" | grep -o '"created_at":"[^"]*"' | wc -l | tr -d ' ')
-  { [ "${UNIQ:-0}" = "1" ] && [ "${NMOD:-0}" -gt 2 ]; } && bad "All $NMOD models share one created_at -> fabricated catalog." || ok "Catalog dates look varied (or no catalog)."
+  # real Anthropic uses created_at (ISO); one-api/new-api proxies use created (unix). Check both.
+  STAMPS=$(echo "$BODY" | grep -oE '"created(_at)?":("?[^",}]*"?)')
+  UNIQ=$(echo "$STAMPS" | sort -u | grep -c . )
+  NMOD=$(echo "$STAMPS" | grep -c . )
+  { [ "${UNIQ:-0}" = "1" ] && [ "${NMOD:-0}" -gt 2 ]; } && bad "All $NMOD models share one creation timestamp -> fabricated catalog." || ok "Catalog timestamps look varied (or no catalog)."
   # 'object:list' is OpenAI-native; only suspicious when the endpoint claims to be Anthropic
   [ "$PROVIDER" = "anthropic" ] && echo "$BODY" | grep -q '"object"[[:space:]]*:[[:space:]]*"list"' && bad "Anthropic endpoint returns OpenAI-style 'object:list' schema -> mocked catalog."
 else inf "No usable /v1/models (HTTP ${STATUS})."; fi

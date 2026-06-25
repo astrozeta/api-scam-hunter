@@ -64,9 +64,14 @@ your own gateway, Cloudflare or a corp proxy add one too. If the user *declared*
   real scam.**
 - **System-prompt control** — send `system:"You are a parrot, reply only BANANA"`, ask "who are
   you?". No "BANANA" → the proxy discards your prompt and injects its own identity.
-- **Model catalog** — `/v1/models` where every model shares one fake `created_at`
-  (`2024-01-01T00:00:00Z`), or an Anthropic endpoint returning OpenAI's `"object":"list"`.
+- **Model catalog** — `/v1/models` where every model shares one fake creation timestamp, or an
+  Anthropic endpoint returning OpenAI's `"object":"list"` (the `one-api`/`new-api` reseller stack).
 - **Phantom model** — a non-existent model that doesn't error cleanly → improvised routing.
+- **Fabricated stub / client-gating** — a `200` missing the canonical fields the real API always
+  returns (`id`, `role`, `model`, `stop_reason`, `usage`) is a canned payload, not a completion.
+  Some proxies reply `"Please use Claude Code CLI"` to anything but the genuine binary (likely TLS
+  fingerprinting) — an anti-analysis gate that is itself a red flag. Don't mis-label a stub as
+  "system-prompt injection": they are different frauds, and precision matters in a report.
 
 **Gate every body check on a 2xx.** A prepaid reseller key often returns `403
 INSUFFICIENT_BALANCE`; a 4xx body has no "BANANA" and no `msg_` id, so judging it as 2xx would

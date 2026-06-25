@@ -60,9 +60,15 @@ not the same thing:
    is suspiciously fast.) *This is the #1 scam and what most "detectors" miss.*
 2. **System-prompt control** — sends a throwaway system prompt and checks the endpoint honors it
    instead of injecting its own identity ("Kiro", etc.).
-3. **Model catalog audit** — flags fabricated `/v1/models` (identical fake `created_at`;
-   OpenAI-style `object:list` on an endpoint claiming to be Anthropic).
+3. **Model catalog audit** — flags fabricated `/v1/models` (identical fake creation timestamp;
+   OpenAI-style `object:list` on an endpoint claiming to be Anthropic). Catches the `one-api` /
+   `new-api` reseller software fingerprint.
 4. **Phantom-model routing** — requests a non-existent model; a real API rejects it cleanly.
+5. **Fabricated stub / client-gating** — a `200` that omits the canonical fields the real API
+   always returns (`id`, `role`, `model`, `stop_reason`, `usage`) is a canned payload, not a real
+   completion. Some proxies (e.g. on Istio/Envoy) reply `"Please use Claude Code CLI"` to anything
+   that isn't the genuine CLI binary — an anti-analysis gate that is itself a red flag, since the
+   real API answers any valid client.
 
 Verdict: **any Axis B signal → fraud.** Interposition without malice → "a middleman is in the
 path; if you didn't put it there, it still reads everything." All clean → behaves like a direct,

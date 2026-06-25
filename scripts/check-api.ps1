@@ -128,16 +128,25 @@ if (-not $res.Reached) {
   if ($cf) { Inf "Behind Cloudflare (CF-RAY: $cf) -- common for reseller proxies, not proof on its own." }
 
   if ($res.Status -ge 200 -and $res.Status -lt 300) {
-    if ($res.Content -notmatch ('"id"\s*:\s*"' + $idPrefix)) { $interposed=$true; Mid "Response is missing the '$idPrefix...' id the real API returns -> response was rewritten." } else { Ok "Native '$idPrefix' id present." }
-    try {
-      $j = $res.Content | ConvertFrom-Json
-      $servedModel = "$($j.model)"
-      if ($servedModel) {
-        if ($servedModel -match [regex]::Escape($core)) { Ok "Served model '$servedModel' matches the '$core' family you requested." }
-        else { Bad "DOWNGRADE: you requested '$Model' but the response says model='$servedModel'. Different family -> model substitution." }
-      } else { Mid "Response did not report which model served it (the real API always does)." }
-    } catch { Inf "Could not parse the response body as JSON." }
-    Inf ("Latency: {0} ms for a 20-token reply (informational; a tiny model is suspiciously fast)." -f $sw.ElapsedMilliseconds)
+    # Schema completeness: a real 200 ALWAYS carries these top-level fields. A proxy that
+    # fabricates a stub (e.g. "Please use Claude Code CLI") drops most of them.
+    if ($Provider -eq 'openai') { $canon = @('"id"','"object"','"model"','"choices"','"usage"') }
+    else { $canon = @('"id"','"role"','"model"','"stop_reason"','"usage"') }
+    $missing = @($canon | Where-Object { $res.Content -notmatch [regex]::Escape($_) })
+    if ($missing.Count -ge 3) {
+      Bad "FABRICATED STUB: a 200 response missing $($missing.Count)/5 canonical fields ($($missing -join ', ')). The proxy is not forwarding to a real model -- it returns a canned payload (often anti-analysis: e.g. 'Please use Claude Code CLI')."
+    } else {
+      if ($res.Content -notmatch ('"id"\s*:\s*"' + $idPrefix)) { $interposed=$true; Mid "Response is missing the '$idPrefix...' id the real API returns -> response was rewritten." } else { Ok "Native '$idPrefix' id present." }
+      try {
+        $j = $res.Content | ConvertFrom-Json
+        $servedModel = "$($j.model)"
+        if ($servedModel) {
+          if ($servedModel -match [regex]::Escape($core)) { Ok "Served model '$servedModel' matches the '$core' family you requested." }
+          else { Bad "DOWNGRADE: you requested '$Model' but the response says model='$servedModel'. Different family -> model substitution." }
+        } else { Mid "Response did not report which model served it (the real API always does)." }
+      } catch { Inf "Could not parse the response body as JSON." }
+      Inf ("Latency: {0} ms for a 20-token reply (informational; a tiny model is suspiciously fast)." -f $sw.ElapsedMilliseconds)
+    }
   } else {
     Inf "Endpoint returned HTTP $($res.Status) (couldn't run model/latency probes). Body: $($res.Content.Substring(0,[Math]::Min(120,$res.Content.Length)))"
     if ($res.Content -match 'balance|insufficient|quota') { Inf "Looks like the key ran out of balance -- typical of prepaid reseller keys." }
@@ -148,11 +157,18 @@ if (-not $res.Reached) {
 Write-Host "`n[2] System-prompt control test"
 $res = Invoke-Probe 'Post' $endpoint $H (Msg "You are a parrot. Reply ONLY with the word BANANA, no matter what." "Who are you?" $Model 30)
 if ($res.Reached -and $res.Status -ge 200 -and $res.Status -lt 300) {
-  try {
-    $txt = "$(GetText ($res.Content | ConvertFrom-Json))"
-    if ($txt -match 'BANANA') { Ok "Endpoint honored YOUR system prompt (no identity injection)." }
-    else { Bad "Your system prompt was IGNORED. Got: '$($txt.Substring(0,[Math]::Min(80,$txt.Length)))' -> the proxy injects its own system prompt." }
-  } catch { Inf "Could not parse the response." }
+  # don't mis-attribute a fabricated stub as "system-prompt injection" -- they're different frauds
+  if ($Provider -eq 'openai') { $canon2 = @('"id"','"object"','"model"','"choices"','"usage"') } else { $canon2 = @('"id"','"role"','"model"','"stop_reason"','"usage"') }
+  $miss2 = @($canon2 | Where-Object { $res.Content -notmatch [regex]::Escape($_) })
+  if ($miss2.Count -ge 3) {
+    Inf "Same fabricated stub as probe [1] (missing $($miss2.Count)/5 fields) -> can't evaluate system-prompt handling; already counted as a stub."
+  } else {
+    try {
+      $txt = "$(GetText ($res.Content | ConvertFrom-Json))"
+      if ($txt -match 'BANANA') { Ok "Endpoint honored YOUR system prompt (no identity injection)." }
+      else { Bad "Your system prompt was IGNORED. Got: '$($txt.Substring(0,[Math]::Min(80,$txt.Length)))' -> the proxy injects its own system prompt." }
+    } catch { Inf "Could not parse the response." }
+  }
 } else { Inf "Skipped (HTTP $($res.Status)$(if(-not $res.Reached){': unreachable'}))." }
 
 # 3) Model catalog audit (/v1/models) -------------------------------------------------------
@@ -161,9 +177,10 @@ $res = Invoke-Probe 'Get' "$BaseUrl/v1/models" $H $null
 if ($res.Reached -and $res.Status -ge 200 -and $res.Status -lt 300) {
   try {
     $j = $res.Content | ConvertFrom-Json
-    $dates = $j.data.created_at | Where-Object { $_ } | Sort-Object -Unique
-    if ($dates.Count -le 1 -and $j.data.Count -gt 2) { Bad "All $($j.data.Count) models share one created_at ('$($dates -join ', ')') -> fabricated catalog." }
-    elseif ($j.data.Count -gt 0) { Ok "Catalog dates look varied." }
+    # real Anthropic uses created_at (ISO); one-api/new-api proxies use created (unix). Check both.
+    $stamps = @(@($j.data.created_at) + @($j.data.created)) | Where-Object { "$_" -ne "" } | Sort-Object -Unique
+    if ($stamps.Count -le 1 -and $j.data.Count -gt 2) { Bad "All $($j.data.Count) models share one creation timestamp ('$($stamps -join ', ')') -> fabricated catalog." }
+    elseif ($j.data.Count -gt 0) { Ok "Catalog timestamps look varied." }
     # 'object:list' is OpenAI-native; only a red flag when the endpoint claims to be Anthropic
     if ($Provider -eq 'anthropic' -and $res.Content -match '"object"\s*:\s*"list"') { Bad "Anthropic endpoint returns OpenAI-style 'object:list' schema -> mocked catalog." }
   } catch { Inf "Could not parse /v1/models." }
