@@ -95,7 +95,7 @@ run_item(){ # $1=id $2=prompt $3=ok-regex
   if echo "$ANS" | grep -qiE "$3"; then PASS=$((PASS+1)); ok "$(printf '%-12s' "$1") PASS  '$short'  [${MS} ms]"
   else bad "$(printf '%-12s' "$1") FAIL  '$short'  [${MS} ms]"; fi
 }
-run_item "CRT-bat"     'A bat and a ball cost 1.10 dollars in total. The bat costs 1.00 dollar more than the ball. How much does the ball cost? Reply ONLY the amount.' '0\.05|5 cents|five cents'
+run_item "CRT-bat"     'A bat and a ball cost 1.10 dollars in total. The bat costs 1.00 dollar more than the ball. How much does the ball cost? Reply ONLY the amount.' '0[.,]05|5 cents|five cents'
 run_item "CRT-widgets" 'If 5 machines take 5 minutes to make 5 widgets, how long would 100 machines take to make 100 widgets? Reply ONLY the number of minutes.' '(^|[^0-9])5([^0-9]|$)'
 run_item "count-r"     'How many times does the letter r appear in the word strawberry? Reply ONLY a number.' '(^|[^0-9])3([^0-9]|$)'
 run_item "socks"       'A drawer has 21 blue, 15 black and 17 red socks. In total darkness, what is the minimum number of socks you must take to be certain you have a matching pair? Reply ONLY a number.' '(^|[^0-9])4([^0-9]|$)'

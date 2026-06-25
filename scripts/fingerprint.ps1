@@ -38,7 +38,7 @@ function Warn($m){ Write-Host "  [?] $m" -ForegroundColor Yellow }
 # --- calibrated battery: separates a high-tier model from a junk/heavily-quantised one ------
 # Each item: a prompt, the expected answer, and a matcher.
 $battery = @(
-  @{ id='CRT-bat';     q='A bat and a ball cost 1.10 dollars in total. The bat costs 1.00 dollar more than the ball. How much does the ball cost? Reply ONLY the amount.'; ok='0\.05|5 cents|five cents' }
+  @{ id='CRT-bat';     q='A bat and a ball cost 1.10 dollars in total. The bat costs 1.00 dollar more than the ball. How much does the ball cost? Reply ONLY the amount.'; ok='0[.,]05|5 cents|five cents|\b5c\b' }
   @{ id='CRT-widgets'; q='If 5 machines take 5 minutes to make 5 widgets, how long would 100 machines take to make 100 widgets? Reply ONLY the number of minutes.'; ok='\b5\b' }
   @{ id='count-r';     q='How many times does the letter r appear in the word strawberry? Reply ONLY a number.'; ok='\b3\b' }
   @{ id='socks';       q='A drawer has 21 blue, 15 black and 17 red socks. In total darkness, what is the minimum number of socks you must take to be certain you have a matching pair? Reply ONLY a number.'; ok='\b4\b' }
