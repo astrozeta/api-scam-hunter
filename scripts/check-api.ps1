@@ -194,6 +194,20 @@ elseif ($res.Status -ge 200 -and $res.Status -lt 300) { Bad "A non-existent mode
 elseif ($res.Status -in 400,404,422) { Ok "Non-existent model rejected (HTTP $($res.Status), as a real API should)." }
 else { Inf "Inconclusive (HTTP $($res.Status) -- likely auth/balance, not model validation)." }
 
+# 5) Streaming protocol compliance ---------------------------------------------------------
+Write-Host "`n[5] Streaming protocol compliance"
+if ($Provider -eq 'anthropic') {
+  $sb = @{ model=$Model; max_tokens=20; stream=$true; messages=@(@{role="user";content="count to three"}) } | ConvertTo-Json -Depth 5
+  $res = Invoke-Probe 'Post' $endpoint $H $sb
+  if (-not $res.Reached) { Inf "Skipped (unreachable)." }
+  elseif ($res.Status -ge 200 -and $res.Status -lt 300) {
+    if (($res.Content -match 'message_start') -and ($res.Content -match 'content_block_delta') -and ($res.Content -match 'message_stop')) {
+      Ok "Valid Anthropic SSE stream (message_start / content_block_delta / message_stop)."
+    } elseif ($res.Content -match '"id"\s*:\s*"msg_') { $interposed=$true; Mid "Asked for a stream but got a non-streamed body -> endpoint doesn't implement Anthropic streaming faithfully (rewritten)." }
+    else { $interposed=$true; Mid "Stream request returned neither a valid SSE sequence nor a real message (stub/rewritten body)." }
+  } else { Inf "Inconclusive (HTTP $($res.Status) -- likely auth/balance/gating)." }
+} else { Inf "Streaming check targets the Anthropic SSE schema; skipped for OpenAI." }
+
 # Verdict -----------------------------------------------------------------------------------
 Write-Host "`n=== VERDICT ===" -ForegroundColor Cyan
 if ($malice -ge 1) {

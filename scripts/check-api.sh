@@ -152,6 +152,15 @@ if is2xx; then bad "Non-existent model returned HTTP ${STATUS} -> improvised rou
 elif [ "${STATUS}" = "400" ] || [ "${STATUS}" = "404" ] || [ "${STATUS}" = "422" ]; then ok "Non-existent model rejected (HTTP ${STATUS}, as a real API should)."
 else inf "Inconclusive (HTTP ${STATUS} -- likely auth/balance, not model validation)."; fi
 
+echo; echo "[5] Streaming protocol compliance"
+if [ "$PROVIDER" = "anthropic" ]; then
+  SR=$(curl -sS "${AUTH[@]}" -X POST "$ENDPOINT" -d "{\"model\":\"$MODEL\",\"max_tokens\":20,\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"count to three\"}]}" --max-time 40 2>/dev/null)
+  if echo "$SR" | grep -q 'message_start' && echo "$SR" | grep -q 'content_block_delta' && echo "$SR" | grep -q 'message_stop'; then
+    ok "Valid Anthropic SSE stream (message_start / content_block_delta / message_stop)."
+  elif echo "$SR" | grep -q '"id"[[:space:]]*:[[:space:]]*"msg_'; then interposed=1; mid "Asked for a stream but got a non-streamed body -> endpoint doesn't implement Anthropic streaming faithfully (rewritten)."
+  else interposed=1; mid "Stream request returned neither a valid SSE sequence nor a real message (stub/rewritten body)."; fi
+else inf "Streaming check targets the Anthropic SSE schema; skipped for OpenAI."; fi
+
 rm -f "$HFILE"
 
 echo; echo "${CYN}=== VERDICT ===${NC}"

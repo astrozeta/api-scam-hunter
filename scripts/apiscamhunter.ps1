@@ -81,9 +81,10 @@ foreach ($m in $plan) {
   }
   if ($m -eq 'recon' -and $t -match '#APISH recon signals=(\d+)') { $rec = @{ signals=[int]$Matches[1] } }
   if ($m -eq 'fingerprint') {
-    if ($t -match '#APISH fingerprint gated=1') { $fp = @{ gated=1; foreign=0; pool=0 } }
-    elseif ($t -match '#APISH fingerprint pass=(\d+) tot=(\d+) blocked=(\d+) foreign=(\d+) pool=(\d+)') { $fp = @{ gated=0; pass=[int]$Matches[1]; tot=[int]$Matches[2]; blocked=[int]$Matches[3]; foreign=[int]$Matches[4]; pool=[int]$Matches[5] } }
-    elseif ($t -match '#APISH fingerprint pass=(\d+) tot=(\d+) blocked=(\d+)') { $fp = @{ gated=0; pass=[int]$Matches[1]; tot=[int]$Matches[2]; blocked=[int]$Matches[3]; foreign=0; pool=0 } }
+    if ($t -match '#APISH fingerprint gated=1') { $fp = @{ gated=1; foreign=0; pool=0; leak=0 } }
+    elseif ($t -match '#APISH fingerprint pass=(\d+) tot=(\d+) blocked=(\d+) foreign=(\d+) pool=(\d+)') { $fp = @{ gated=0; pass=[int]$Matches[1]; tot=[int]$Matches[2]; blocked=[int]$Matches[3]; foreign=[int]$Matches[4]; pool=[int]$Matches[5]; leak=0 } }
+    elseif ($t -match '#APISH fingerprint pass=(\d+) tot=(\d+) blocked=(\d+)') { $fp = @{ gated=0; pass=[int]$Matches[1]; tot=[int]$Matches[2]; blocked=[int]$Matches[3]; foreign=0; pool=0; leak=0 } }
+    if ($fp -and $t -match '#APISH fingerprint[^\r\n]*leak=(\d+)') { $fp.leak = [int]$Matches[1] }
   }
   # early-exit: if behaviour is already fraudulent (2+ signals), skip the expensive fingerprint
   if ($m -eq 'check' -and $chk -and $chk.malice -ge 2 -and $level -eq 'Full') {
@@ -98,6 +99,7 @@ $cat="$E_GREEN CLEAN"; $catKey='clean'; $why=@()
 $sig = 0
 if ($chk) { $sig += $chk.malice }
 if ($fp -and $fp.foreign) { $sig += 1 }
+if ($fp -and $fp.leak) { $sig += 1 }
 $interp = ($chk -and $chk.interposed)
 if (-not $chk -and -not $fp) { $cat="$E_WHITE INCONCLUSIVE (no behavioural module run)"; $catKey='na' }
 elseif ($sig -ge 2)          { $cat="$E_RED FRAUDULENT BEHAVIOUR"; $catKey='fraud' }
@@ -110,6 +112,7 @@ if ($transcripts['check']) {
   $why = ($transcripts['check'] -split "`n") | Where-Object { $_ -match '\[X\]' } | ForEach-Object { ($_ -replace '.*\[X\]\s*','').Trim() }
 }
 if ($fp -and $fp.foreign) { $why += ("Session executes on the proxy's own infrastructure (backend OS does not match your client OS" + $(if($fp.pool -gt 1){"; pool of $($fp.pool) backend workspaces"}) + ") -- not a transparent forward.") }
+if ($fp -and $fp.leak) { $why += "Endpoint retained a planted code across separate requests -> shared context/cache between requests (isolation/privacy failure)." }
 
 Write-Host "`n###############################################" -ForegroundColor Cyan
 Write-Host "#  VERDICT: $cat" -ForegroundColor $(switch($catKey){'fraud'{'Red'}'anomaly'{'Yellow'}'middleman'{'Yellow'}default{'Green'}})

@@ -81,6 +81,9 @@ your own gateway, Cloudflare or a corp proxy add one too. If the user *declared*
   Some proxies reply `"Please use Claude Code CLI"` to anything but the genuine binary (likely TLS
   fingerprinting) — an anti-analysis gate that is itself a red flag. Don't mis-label a stub as
   "system-prompt injection": they are different frauds, and precision matters in a report.
+- **Streaming compliance** — `stream:true` must return the real Anthropic SSE sequence
+  (`message_start → content_block_delta → message_stop`); a rewriting proxy returns a non-streamed
+  body or stub.
 
 **Gate every body check on a 2xx.** A prepaid reseller key often returns `403
 INSUFFICIENT_BALANCE`; a 4xx body has no "BANANA" and no `msg_` id, so judging it as 2xx would
@@ -117,8 +120,10 @@ survives errors), but only judge *behaviour* on a real 200.
    → re-run before claiming a downgrade. The environment probe asks the model for its real OS/working
    dir several times: if the backend OS != the client's, the session runs on the proxy's OWN
    infrastructure (not a transparent forward); varying working dirs reveal a load-balanced POOL of
-   backends (resold/pooled, often stolen, accounts). If the endpoint client-gates (stub to scripts),
-   use `-ViaCli` / `VIACLI=1` to route probes through the genuine CLI binary.
+   backends (resold/pooled, often stolen, accounts). It also runs a latency profile (min/avg/max) and
+   a session-isolation/context-bleed probe (plants a code in one request, asks for it in another; if
+   returned, the endpoint shares context/cache = isolation/privacy failure). If the endpoint
+   client-gates (stub to scripts), use `-ViaCli` / `VIACLI=1` to route probes through the CLI binary.
 3. Collect evidence. Run `scripts/extract-prompt.ps1` / `.sh` to try to make the proxy reveal
    the system prompt / persona it injects (e.g. "You are Kiro") and the model truly serving the
    request; it saves a timestamped transcript. It fires several benign prompt-extraction methods

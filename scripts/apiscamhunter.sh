@@ -76,7 +76,8 @@ done
 # verdict (FRAUD needs >=2 independent behavioural signals: check malice + fingerprint foreign-infra)
 FP_FOREIGN=$(echo "$FP_LINE" | grep -oE 'foreign=[0-9]+' | cut -d= -f2); FP_FOREIGN=${FP_FOREIGN:-0}
 FP_POOL=$(echo "$FP_LINE" | grep -oE 'pool=[0-9]+' | cut -d= -f2); FP_POOL=${FP_POOL:-0}
-SIG=0; [ -n "$CHK_V" ] && SIG=$((SIG+CHK_M)); [ "$FP_FOREIGN" = "1" ] && SIG=$((SIG+1))
+FP_LEAK=$(echo "$FP_LINE" | grep -oE 'leak=[0-9]+' | cut -d= -f2); FP_LEAK=${FP_LEAK:-0}
+SIG=0; [ -n "$CHK_V" ] && SIG=$((SIG+CHK_M)); [ "$FP_FOREIGN" = "1" ] && SIG=$((SIG+1)); [ "$FP_LEAK" = "1" ] && SIG=$((SIG+1))
 if   [ -z "$CHK_V" ] && [ -z "$FP_LINE" ]; then CATE="⚪ INCONCLUSIVE (no behavioural module run)"; KEY_C=na
 elif [ "$SIG" -ge 2 ]; then CATE="🔴 FRAUDULENT BEHAVIOUR"; KEY_C=fraud
 elif [ "$SIG" -eq 1 ]; then CATE="🟠 ANOMALIES DETECTED"; KEY_C=anomaly
@@ -111,6 +112,7 @@ STAMP=$(date -u +'%Y-%m-%d %H:%M:%SZ')
     echo "## Why this verdict (behavioural signals)"; echo
     [ -f "$TRANSDIR/check.txt" ] && { grep '\[X\]' "$TRANSDIR/check.txt" | sed -E 's/.*\[X\] */- /' || true; }
     [ "$FP_FOREIGN" = "1" ] && echo "- Session executes on the proxy's own infrastructure (backend OS does not match your client OS$([ "${FP_POOL:-0}" -gt 1 ] && echo "; pool of $FP_POOL backend workspaces")) -- not a transparent forward."
+    [ "$FP_LEAK" = "1" ] && echo "- Endpoint retained a planted code across separate requests -> shared context/cache (isolation/privacy failure)."
     echo
   fi
   echo "## What this analysis CANNOT prove"; echo

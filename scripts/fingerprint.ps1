@@ -125,9 +125,26 @@ elseif ($d1.text -and $d2.text) {
   else { Warn "Different output at temperature 0. Could be a non-deterministic backend or a POOL of different models/instances." ; Inf "  #1: $($d1.text -replace '\s+',' ')"; Inf "  #2: $($d2.text -replace '\s+',' ')" }
 }
 
-# 4) Latency ------------------------------------------------------------------------------
-Write-Host "`n[4] Latency"
-if (-not $c.gated -and $c.ms) { Inf "Baseline ~$($c.ms) ms. (With -ViaCli this includes CLI startup, so it's not a clean TTFT.)" }
+# 4) Latency profile (statistical) --------------------------------------------------------
+Write-Host "`n[4] Latency profile"
+$lat=@(); for ($i=0; $i -lt 3; $i++) { $la = Ask 'Reply with just: ok' 5; if (-not $la.gated -and $la.ms) { $lat += $la.ms } }
+if ($lat.Count) {
+  $mn=[int](($lat|Measure-Object -Minimum).Minimum); $mx=[int](($lat|Measure-Object -Maximum).Maximum); $av=[int](($lat|Measure-Object -Average).Average)
+  Inf "Over $($lat.Count) calls: min $mn / avg $av / max $mx ms. (ViaCli includes CLI startup; high variance can indicate a busy pool.)"
+} elseif (-not $c.gated -and $c.ms) { Inf "Baseline ~$($c.ms) ms." } else { Inf "No latency samples (gated/blocked)." }
+
+# 6) Session isolation (context-bleed) probe ----------------------------------------------
+# Plant a unique code in one request, ask for it in a SEPARATE request. A correct endpoint has
+# no memory across stateless requests; if it returns the code, it shares context/cache between
+# requests -> a serious isolation/privacy failure (your data could leak to/from other users).
+Write-Host "`n[6] Session isolation (context-bleed) probe"
+$leak = 0
+$uuid = [guid]::NewGuid().ToString()
+$null = Ask "Please remember this reference code for later: $uuid . Reply only: OK" 10
+$bleed = Ask "What was the exact reference code I asked you to remember just before this? If you have no such code, reply only: NONE" 40
+if ($bleed.gated) { Inf "Blocked (gated/queue)." }
+elseif ($bleed.text -match [regex]::Escape($uuid)) { $leak=1; Bad "LEAK: the endpoint returned the planted code across separate requests -> shared context/cache between requests, a serious isolation/privacy failure." }
+else { Ok "No cross-request state retained (requests are isolated, as a real API is)." }
 
 # 5) Environment / infrastructure probe ----------------------------------------------------
 # Asks the model for its REAL execution environment several times. A transparent endpoint runs
@@ -171,4 +188,4 @@ if ($tot -eq 0) {
   else { Write-Host "Mixed results -> below a consistent frontier model. NOTE: one failure can be sampling noise (temp>0) -- re-run before concluding a downgrade." -ForegroundColor Yellow }
 }
 Write-Host "Note: a clean capability profile is not a guarantee of the exact tier, and says nothing about prompt harvesting." -ForegroundColor DarkGray
-Write-Host "#APISH fingerprint pass=$pass tot=$tot blocked=$blocked foreign=$([int][bool]$foreignInfra) pool=$poolSize"
+Write-Host "#APISH fingerprint pass=$pass tot=$tot blocked=$blocked foreign=$([int][bool]$foreignInfra) pool=$poolSize leak=$([int][bool]$leak)"

@@ -97,6 +97,9 @@ not the same thing:
    completion. Some proxies (e.g. on Istio/Envoy) reply `"Please use Claude Code CLI"` to anything
    that isn't the genuine CLI binary — an anti-analysis gate that is itself a red flag, since the
    real API answers any valid client.
+6. **Streaming compliance** — a `stream:true` request must return the real Anthropic SSE sequence
+   (`message_start → content_block_delta → message_stop`). A proxy that rewrites responses returns
+   a non-streamed body or a stub instead.
 
 Verdict: **any Axis B signal → fraud.** Interposition without malice → "a middleman is in the
 path; if you didn't put it there, it still reads everything." All clean → behaves like a direct,
@@ -156,12 +159,18 @@ single failed probe can be sampling noise, so re-run before concluding a downgra
 endpoint client-gates (returns a stub to scripts), `fingerprint` detects it and routes probes
 through the genuine CLI binary with `-ViaCli` / `VIACLI=1`.
 
-It also runs an **environment / infrastructure probe**: it asks the model for its real OS and
-working directory several times. If the backend OS doesn't match your client's, **your session is
-executing on the proxy's own infrastructure** (not a transparent forward); varying working
-directories reveal a **load-balanced pool of backends** — the tell-tale of resold/pooled (often
-stolen) accounts. *This is a detection no other API checker performs, and it is what unmasked a
-real reseller running a macOS fleet while the client was Windows.*
+It also runs three deeper probes:
+- **Environment / infrastructure** — asks the model for its real OS and working directory several
+  times. If the backend OS doesn't match your client's, **your session is executing on the proxy's
+  own infrastructure** (not a transparent forward); varying working directories reveal a
+  **load-balanced pool of backends** — the tell-tale of resold/pooled (often stolen) accounts.
+  *This unmasked a real reseller running a macOS fleet while the client was Windows.*
+- **Latency profile** — several timed calls (min/avg/max); high variance hints at a busy pool.
+- **Session isolation (context-bleed)** — plants a unique code in one request and asks for it in a
+  separate one. If the endpoint returns it, it **shares context/cache between requests** — a serious
+  isolation/privacy failure.
+
+*The environment and isolation checks are detections no other API checker performs.*
 
 ## 🌏 The grey market behind it
 

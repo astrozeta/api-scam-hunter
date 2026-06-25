@@ -113,6 +113,15 @@ elif [ -n "$D1" ] && [ -n "$D2" ]; then
   else warn "Different output at temperature 0 -> non-deterministic backend or a POOL of different models/instances."; inf "  #1: $D1"; inf "  #2: $D2"; fi
 fi
 
+echo; echo "[4] Latency profile"
+LAT=""; LN=0
+for i in 1 2 3; do ask "Reply with just: ok" 5; { [ "$GATED" = "1" ] || [ "${MS:-0}" -le 0 ]; } && continue; LAT="$LAT $MS"; LN=$((LN+1)); done
+if [ "$LN" -gt 0 ]; then
+  mn=$(echo $LAT | tr ' ' '\n' | sort -n | head -1); mx=$(echo $LAT | tr ' ' '\n' | sort -n | tail -1)
+  av=$(echo $LAT | tr ' ' '\n' | awk '{s+=$1}END{printf "%d", s/NR}')
+  inf "Over $LN calls: min $mn / avg $av / max $mx ms. (VIACLI includes CLI startup; high variance can indicate a busy pool.)"
+else inf "No latency samples (gated/blocked)."; fi
+
 echo; echo "[5] Environment / infrastructure probe"
 # A transparent endpoint runs on YOUR machine (your OS); a proxy that executes your session on its
 # own fleet reports a different OS, and a pool reports varying working dirs (this unmasked aerolink).
@@ -140,8 +149,20 @@ else
   else POOL=${UNIQ:-0}; fi
 fi
 
+echo; echo "[6] Session isolation (context-bleed) probe"
+# Plant a unique code in one request, ask for it in a SEPARATE request. A correct endpoint has no
+# memory across stateless requests; returning it means shared context/cache -> isolation/privacy fail.
+LEAK=0
+UUID=$( (command -v uuidgen >/dev/null 2>&1 && uuidgen) || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "ref-$RANDOM$RANDOM-$$" )
+ask "Please remember this reference code for later: $UUID . Reply only: OK" 10
+ask "What was the exact reference code I asked you to remember just before this? If you have no such code, reply only: NONE" 40
+if [ "$GATED" = "1" ]; then inf "Blocked (gated/queue)."
+elif echo "$ANS" | grep -qF "$UUID"; then LEAK=1; bad "LEAK: endpoint returned the planted code across separate requests -> shared context/cache, a serious isolation/privacy failure."
+else ok "No cross-request state retained (requests are isolated, as a real API is)."; fi
+
 echo; echo "${CYN}=== FINGERPRINT SUMMARY ===${NC}"
 [ "$FOREIGN" = "1" ] && echo "${RED}INFRASTRUCTURE: your session runs on the proxy's own machines (OS mismatch). Not a transparent forward.${NC}"
+[ "$LEAK" = "1" ] && echo "${RED}ISOLATION: endpoint leaks context across requests (shared cache/state).${NC}"
 if [ "$TOT" = "0" ]; then echo "${YEL}Could not evaluate capability (all probes gated/blocked). Try VIACLI=1, or retry when the queue frees.${NC}"
 else
   msg="Capability battery: $PASS/$TOT passed"; [ "$BLOCKED" -gt 0 ] && msg="$msg ($BLOCKED blocked)"
@@ -150,4 +171,4 @@ else
   else echo "${YEL}$msg. Mixed results -> below a consistent frontier model. NOTE: one failure can be sampling noise (temp>0) -- re-run before concluding a downgrade.${NC}"; fi
 fi
 echo "${DIM}Note: a clean capability profile is not a guarantee of the exact tier, and says nothing about prompt harvesting.${NC}"
-echo "#APISH fingerprint pass=$PASS tot=$TOT blocked=$BLOCKED foreign=$FOREIGN pool=${POOL:-0}"
+echo "#APISH fingerprint pass=$PASS tot=$TOT blocked=$BLOCKED foreign=$FOREIGN pool=${POOL:-0} leak=$LEAK"
