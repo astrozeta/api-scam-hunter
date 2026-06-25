@@ -154,6 +154,7 @@ if ($PricePerMTokIn -gt 0) {
 Write-Host "`n=== RECON SUMMARY ===" -ForegroundColor Cyan
 if ($flags -eq 0) { Write-Host "No infrastructure risk signals. (Recon is context only -- run check-api for the behavioural verdict.)" -ForegroundColor Green }
 else { Write-Host "$flags infrastructure risk signal(s) flagged above. This is CONTEXT, not a fraud verdict -- combine with check-api's behavioural result." -ForegroundColor Yellow }
+Write-Host "#APISH recon signals=$flags"
 
 if ($Out) {
   $log.Insert(1, "Risk signals: $flags")

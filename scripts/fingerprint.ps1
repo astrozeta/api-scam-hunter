@@ -92,7 +92,7 @@ $c = Ask 'Reply with exactly: OK' 10
 if ($c.gated) {
   Bad "This endpoint returned a fabricated stub (client-gating) instead of a real answer."
   Inf "Direct analysis is blocked. Re-run with -ViaCli to route probes through the genuine CLI binary."
-  if (-not $ViaCli) { exit 2 }
+  if (-not $ViaCli) { Write-Host "#APISH fingerprint gated=1"; exit 2 }
 } elseif ($c.err) {
   Inf "Calibration request failed: $($c.raw). (If it's a queue/balance error, try again later.)"
 } else { Ok "Endpoint answers real requests (latency $($c.ms) ms baseline)." }
@@ -140,3 +140,4 @@ if ($tot -eq 0) {
   else { Write-Host "Mixed results -> below a consistent frontier model. NOTE: one failure can be sampling noise (temp>0) -- re-run before concluding a downgrade." -ForegroundColor Yellow }
 }
 Write-Host "Note: a clean capability profile is not a guarantee of the exact tier, and says nothing about prompt harvesting." -ForegroundColor DarkGray
+Write-Host "#APISH fingerprint pass=$pass tot=$tot blocked=$blocked"

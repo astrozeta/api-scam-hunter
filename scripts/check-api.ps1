@@ -210,3 +210,6 @@ if ($malice -ge 1) {
 } else {
   Write-Host "No interposition and no malicious behaviour detected. Behaves like a legitimate, direct endpoint." -ForegroundColor Green
 }
+# machine-readable summary line for the apiscamhunter orchestrator
+$vtag = if ($malice -ge 1){'fraud'}elseif($interposed){'interposed'}else{'clean'}
+Write-Host "#APISH check verdict=$vtag malice=$malice interposed=$([int][bool]$interposed)"

@@ -166,3 +166,6 @@ elif [ "$interposed" = "1" ]; then
 else
   echo "${GRN}No interposition and no malicious behaviour detected. Behaves like a legitimate, direct endpoint.${NC}"
 fi
+# machine-readable summary line for the apiscamhunter orchestrator
+if [ "$malice" -ge 1 ]; then vtag=fraud; elif [ "$interposed" = "1" ]; then vtag=interposed; else vtag=clean; fi
+echo "#APISH check verdict=$vtag malice=$malice interposed=$interposed"

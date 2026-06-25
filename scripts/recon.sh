@@ -112,3 +112,4 @@ fi
 echo; echo "${CYN}=== RECON SUMMARY ===${NC}"
 if [ "$flags" -eq 0 ]; then echo "${GRN}No infrastructure risk signals. (Recon is context only -- run check-api for the behavioural verdict.)${NC}"
 else echo "${YEL}$flags infrastructure risk signal(s) flagged above. This is CONTEXT, not a fraud verdict -- combine with check-api's behavioural result.${NC}"; fi
+echo "#APISH recon signals=$flags"

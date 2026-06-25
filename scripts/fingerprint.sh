@@ -83,7 +83,7 @@ ask "Reply with exactly: OK" 10
 if [ "$GATED" = "1" ]; then
   bad "This endpoint returned a fabricated stub (client-gating) instead of a real answer."
   inf "Direct analysis is blocked. Re-run with VIACLI=1 to route probes through the genuine CLI binary."
-  [ "$VIACLI" != "1" ] && exit 2
+  [ "$VIACLI" != "1" ] && { echo "#APISH fingerprint gated=1"; exit 2; }
 else ok "Endpoint answers real requests (baseline ${MS} ms)."; fi
 
 echo; echo "[1] Capability battery (separates a high-tier model from a junk one)"
@@ -122,3 +122,4 @@ else
   else echo "${YEL}$msg. Mixed results -> below a consistent frontier model. NOTE: one failure can be sampling noise (temp>0) -- re-run before concluding a downgrade.${NC}"; fi
 fi
 echo "${DIM}Note: a clean capability profile is not a guarantee of the exact tier, and says nothing about prompt harvesting.${NC}"
+echo "#APISH fingerprint pass=$PASS tot=$TOT blocked=$BLOCKED"

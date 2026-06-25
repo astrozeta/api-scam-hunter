@@ -28,6 +28,34 @@ plus the evidence to **report and dispute** the scam.
 
 If any column on the right matches, run the full check below.
 
+## 🚀 One command: the orchestrator
+
+`apiscamhunter` runs the modules at a chosen depth, aggregates one verdict and writes a
+**Markdown + HTML report** you can attach to a dispute:
+
+```powershell
+./scripts/apiscamhunter.ps1 -BaseUrl "https://endpoint" -ApiKey "sk-..."            # Standard
+./scripts/apiscamhunter.ps1 -BaseUrl "https://endpoint" -ApiKey "sk-..." -Full -PricePerMTokIn 1.5
+```
+```bash
+./scripts/apiscamhunter.sh https://endpoint sk-...           # Standard
+FULL=1 PRICE=1.5 ./scripts/apiscamhunter.sh https://endpoint sk-...
+```
+
+| Level | Modules | Cost |
+|-------|---------|------|
+| `-Quick` / `QUICK=1` | check-api | minimal |
+| **Standard** (default) | recon + check-api | low |
+| `-Full` / `FULL=1` | recon + check-api + fingerprint + extract-prompt | higher |
+| `-Module x` / `MODULE=x` | one of: check, recon, fingerprint, extract | — |
+
+The verdict uses **five categories**, and by design **🔴 FRAUDULENT BEHAVIOUR requires two
+independent malicious signals** — the tool will not accuse on thin evidence:
+
+🟢 CLEAN · 🟡 UNDECLARED MIDDLEMAN · 🟠 ANOMALIES DETECTED · 🔴 FRAUDULENT BEHAVIOUR
+
+Prefer the orchestrator for a full picture; the individual modules below are also usable on their own.
+
 ## ⚡ Run the automated check
 
 **Windows (PowerShell):**

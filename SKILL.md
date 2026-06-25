@@ -42,8 +42,17 @@ echo "$ANTHROPIC_BASE_URL"; echo "${ANTHROPIC_API_KEY:0:10}..."
 (For OpenAI swap `ANTHROPIC_` for `OPENAI_`.)
 
 ## Run the full automated check
-Prefer the bundled scripts — they run all probes and print a verdict (Anthropic + OpenAI
-auto-detected; pass `-Provider`/`PROVIDER` to force it):
+Easiest: the orchestrator runs the modules at a chosen depth, gives one verdict and writes a
+Markdown + HTML report. Levels: Quick (check only), Standard=default (recon + check), Full
+(recon + check + fingerprint + extract), or a single `-Module`/`MODULE=`:
+```
+scripts/apiscamhunter.ps1 -BaseUrl <url> -ApiKey <key>            # Windows, Standard
+scripts/apiscamhunter.ps1 -BaseUrl <url> -ApiKey <key> -Full -PricePerMTokIn 1.5
+FULL=1 PRICE=1.5 scripts/apiscamhunter.sh <url> <key>            # macOS/Linux
+```
+Verdict = five categories; **🔴 FRAUDULENT BEHAVIOUR requires 2+ independent malicious signals**
+(never accuse on thin evidence). Or run a single module directly (Anthropic + OpenAI auto-detected;
+`-Provider`/`PROVIDER` to force):
 ```
 scripts/check-api.ps1 -BaseUrl <url> -ApiKey <key>          # Windows
 scripts/check-api.ps1 -Known                                # you DECLARED a gateway on purpose
