@@ -122,6 +122,27 @@ apiranking.com) and the *internal* search of closed forums (linux.do, NodeSeek, 
 verifiable reputation.** And the forum consensus on the whole category: never prepay large
 amounts.
 
+## 📑 Collect hard evidence (extract the injected prompt)
+
+If the quick check says a proxy is interposed, `extract-prompt` gathers the *proof*: it tries to
+make the proxy reveal the **hidden system prompt / persona it injects** (e.g. "You are Kiro")
+and the model really serving you, then saves a timestamped transcript for your refund/abuse report.
+
+```powershell
+./scripts/extract-prompt.ps1 -BaseUrl "https://the-endpoint.com" -ApiKey "sk-..." -Out evidence.txt
+```
+```bash
+./scripts/extract-prompt.sh https://the-endpoint.com sk-... > /dev/null   # transcript -> scam-evidence-*.txt
+```
+
+It fires several benign prompt-extraction techniques (direct dump, authority override, assistant
+prefill, base64/spaced-output to dodge filters, translate-then-original, identity probe,
+format-shift) — several, because a proxy may filter the obvious ones. Anything you did **not**
+configure that shows up in the output is the proxy's doing.
+
+> This is prompt-**leaking** against *your own* purchased endpoint to document fraud — not a
+> jailbreak for harmful content, and not run against anyone else's system.
+
 ## ✅ If you confirm a scam
 
 1. **Stop using it for anything sensitive** immediately.
