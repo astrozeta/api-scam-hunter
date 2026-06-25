@@ -97,6 +97,10 @@ survives errors), but only judge *behaviour* on a real 200.
    [Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", $null, "User")
    [Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY",  $null, "User")
    ```
+3a. Profile the infrastructure with `scripts/recon.ps1` / `.sh` (FREE — no LLM calls, works even
+   when the API blocks analysis): DNS/ASN, domain age (RDAP), TLS cert, crt.sh subdomains, security
+   headers, the one-api/new-api fingerprint, and an economic-plausibility check (price vs list).
+   It reports context, not a verdict — pair it with check-api.
 3. Collect evidence. Run `scripts/extract-prompt.ps1` / `.sh` to try to make the proxy reveal
    the system prompt / persona it injects (e.g. "You are Kiro") and the model truly serving the
    request; it saves a timestamped transcript. It fires several benign prompt-extraction methods

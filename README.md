@@ -149,6 +149,27 @@ configure that shows up in the output is the proxy's doing.
 > This is prompt-**leaking** against *your own* purchased endpoint to document fraud — not a
 > jailbreak for harmful content, and not run against anyone else's system.
 
+## 🌐 Profile the infrastructure (free, no API calls)
+
+`recon` does passive reconnaissance on the domain — **no LLM calls, so it costs nothing** and
+works even when the API itself blocks analysis (like an endpoint that only answers the real CLI):
+
+```powershell
+./scripts/recon.ps1 -BaseUrl "https://the-endpoint.com" -PricePerMTokIn 1.5 -Tier opus
+```
+```bash
+./scripts/recon.sh https://the-endpoint.com 1.5 opus
+```
+
+It reports: DNS + hosting (ASN/geo), domain age (RDAP), TLS certificate (issuer/age/SANs),
+Certificate Transparency subdomains (crt.sh), HTTP/security headers, the **one-api/new-api
+reseller-software fingerprint**, exposed pages, and an **economic-plausibility** check (what you
+pay vs. official list price).
+
+> `recon` reports **context, not a verdict**. A young domain or a Cloudflare front is a *fact*,
+> not proof of fraud. The strong tells are the reseller-software fingerprint and selling far below
+> cost. Always pair it with `check-api`'s behavioural result.
+
 ## ✅ If you confirm a scam
 
 1. **Stop using it for anything sensitive** immediately.
