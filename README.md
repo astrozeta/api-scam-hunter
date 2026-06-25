@@ -189,10 +189,13 @@ and the model really serving you, then saves a timestamped transcript for your r
 ./scripts/extract-prompt.sh https://the-endpoint.com sk-... > /dev/null   # transcript -> scam-evidence-*.txt
 ```
 
-It fires several benign prompt-extraction techniques (direct dump, authority override, assistant
-prefill, base64/spaced-output to dodge filters, translate-then-original, identity probe,
-format-shift) — several, because a proxy may filter the obvious ones. Anything you did **not**
-configure that shows up in the output is the proxy's doing.
+It fires **14 benign prompt-extraction techniques** — several, because a proxy may filter the
+obvious ones: direct dump, authority override, assistant prefill, base64 / spaced-output /
+zero-width / homoglyph to dodge string filters, translate-then-original, XML role-tag injection,
+a yes/no binary-search probe, context overflow, many-shot priming, and an identity probe.
+Anything you did **not** configure that shows up is the proxy's doing. For client-gated proxies
+(stub to scripts), add `-ViaCli` / `VIACLI=1` to route the user-only techniques through the real
+CLI binary.
 
 > This is prompt-**leaking** against *your own* purchased endpoint to document fraud — not a
 > jailbreak for harmful content, and not run against anyone else's system.

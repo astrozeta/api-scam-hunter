@@ -119,10 +119,13 @@ survives errors), but only judge *behaviour* on a real 200.
 3. Collect evidence. Run `scripts/extract-prompt.ps1` / `.sh` to try to make the proxy reveal
    the system prompt / persona it injects (e.g. "You are Kiro") and the model truly serving the
    request; it saves a timestamped transcript. It fires several benign prompt-extraction methods
-   (direct dump, authority override, assistant prefill, base64/spaced output to dodge filters,
-   translate-then-original, identity probe, format-shift). This is prompt-leaking against the
-   user's OWN purchased endpoint to document fraud — never against third-party systems. Attach
-   the transcript + the check-api output + screenshots to the report.
+   (14 in total: direct dump, authority override, assistant prefill, base64 / spaced / zero-width
+   / homoglyph to dodge string filters, translate-then-original, XML role-tag injection, a yes/no
+   binary-search probe, context overflow, many-shot, identity probe). The binary-search probe is
+   the cleanest single signal — it answers whether a foreign persona/model is injected without
+   dumping anything. For client-gated proxies add `-ViaCli` / `VIACLI=1`. This is prompt-leaking
+   against the user's OWN purchased endpoint to document fraud — never against third-party
+   systems. Attach the transcript + check-api output + screenshots to the report.
 4. Report & dispute through legitimate channels (see `docs/REPORTING.md`): the AI provider's
    Trust & Safety, the CDN/host abuse desk (e.g. Cloudflare), the reseller (refund), a
    payment chargeback, and a community warning. **Never** attack their systems — it ruins
