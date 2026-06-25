@@ -171,6 +171,14 @@ if [ "$PROVIDER" = "anthropic" ]; then
   else interposed=1; mid "count_tokens endpoint missing or non-conformant (the real Anthropic API implements it) -> incomplete/rewritten API surface."; fi
 else inf "count_tokens check targets the Anthropic API; skipped for OpenAI."; fi
 
+echo; echo "[7] Error-schema conformance"
+if [ "$PROVIDER" = "anthropic" ]; then
+  req POST "$ENDPOINT" "{\"model\":\"$MODEL\",\"max_tokens\":20}"   # missing required "messages"
+  if is2xx; then interposed=1; mid "An invalid request (missing 'messages') returned HTTP ${STATUS} instead of a 400 -> no real validation (stub/rewritten)."
+  elif echo "$BODY" | grep -q '"type"[[:space:]]*:[[:space:]]*"error"' && echo "$BODY" | grep -q 'invalid_request_error'; then ok "Errors follow the Anthropic schema (type:error / invalid_request_error)."
+  else interposed=1; mid "Error response does not follow Anthropic's schema -> rewritten error surface. Got: $(echo "$BODY" | head -c 120)"; fi
+else inf "Error-schema check targets the Anthropic API; skipped for OpenAI."; fi
+
 rm -f "$HFILE"
 
 echo; echo "${CYN}=== VERDICT ===${NC}"

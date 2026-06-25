@@ -100,6 +100,10 @@ not the same thing:
 6. **Streaming compliance** — a `stream:true` request must return the real Anthropic SSE sequence
    (`message_start → content_block_delta → message_stop`). A proxy that rewrites responses returns
    a non-streamed body or a stub instead.
+7. **Token-count + error-schema conformance** — checks `/v1/messages/count_tokens` (coverage and
+   token-inflation), and sends a deliberately invalid request: the real API returns its specific
+   error schema (`{"type":"error","error":{"type":"invalid_request_error",...}}`); a proxy that
+   makes up its own errors or returns `200` to an invalid body is rewriting the surface.
 
 Verdict: **any Axis B signal → fraud.** Interposition without malice → "a middleman is in the
 path; if you didn't put it there, it still reads everything." All clean → behaves like a direct,

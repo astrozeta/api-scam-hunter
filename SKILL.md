@@ -84,6 +84,9 @@ your own gateway, Cloudflare or a corp proxy add one too. If the user *declared*
 - **Streaming compliance** — `stream:true` must return the real Anthropic SSE sequence
   (`message_start → content_block_delta → message_stop`); a rewriting proxy returns a non-streamed
   body or stub.
+- **count_tokens + error-schema** — `/v1/messages/count_tokens` coverage (and token-inflation), plus
+  a deliberately invalid request: the real API returns `{"type":"error","error":{"type":"invalid_request_error",...}}`;
+  a made-up error or a `200` to an invalid body means a rewritten surface.
 
 **Gate every body check on a 2xx.** A prepaid reseller key often returns `403
 INSUFFICIENT_BALANCE`; a 4xx body has no "BANANA" and no `msg_` id, so judging it as 2xx would

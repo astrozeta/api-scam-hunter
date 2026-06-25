@@ -221,6 +221,20 @@ if ($Provider -eq 'anthropic') {
   } else { $interposed=$true; Mid "count_tokens endpoint missing or non-conformant (the real Anthropic API implements it) -> incomplete/rewritten API surface." }
 } else { Inf "count_tokens check targets the Anthropic API; skipped for OpenAI." }
 
+# 7) Error-schema conformance --------------------------------------------------------------
+# A deliberately invalid request must return Anthropic's error schema
+# ({"type":"error","error":{"type":"invalid_request_error",...}}). A proxy that makes up its own
+# errors ("Priority queue full", "INSUFFICIENT_BALANCE" without the wrapper) is rewriting the surface.
+Write-Host "`n[7] Error-schema conformance"
+if ($Provider -eq 'anthropic') {
+  $badBody = '{"model":"' + $Model + '","max_tokens":20}'   # missing the required "messages" field
+  $res = Invoke-Probe 'Post' $endpoint $H $badBody
+  if (-not $res.Reached) { Inf "Skipped (unreachable)." }
+  elseif ($res.Status -ge 200 -and $res.Status -lt 300) { $interposed=$true; Mid "An invalid request (missing 'messages') returned HTTP $($res.Status) instead of a 400 -> no real validation (stub/rewritten)." }
+  elseif (($res.Content -match '"type"\s*:\s*"error"') -and ($res.Content -match 'invalid_request_error')) { Ok "Errors follow the Anthropic schema (type:error / invalid_request_error)." }
+  else { $interposed=$true; Mid "Error response does not follow Anthropic's schema -> rewritten error surface. Got: $($res.Content.Substring(0,[Math]::Min(120,$res.Content.Length)))" }
+} else { Inf "Error-schema check targets the Anthropic API; skipped for OpenAI." }
+
 # Verdict -----------------------------------------------------------------------------------
 Write-Host "`n=== VERDICT ===" -ForegroundColor Cyan
 if ($malice -ge 1) {
