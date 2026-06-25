@@ -179,6 +179,20 @@ if [ "$PROVIDER" = "anthropic" ]; then
   else interposed=1; mid "Error response does not follow Anthropic's schema -> rewritten error surface. Got: $(echo "$BODY" | head -c 120)"; fi
 else inf "Error-schema check targets the Anthropic API; skipped for OpenAI."; fi
 
+echo; echo "[8] Prompt caching (billing transparency)"
+if [ "$PROVIDER" = "anthropic" ]; then
+  PAD=$(yes "This is a cache-padding sentence used only to exceed the minimum cacheable size." 2>/dev/null | head -200 | tr '\n' ' ')
+  CB=$(printf '{"model":"%s","max_tokens":10,"system":[{"type":"text","text":%s,"cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"say hi"}]}' "$MODEL" "$(jstr "$PAD")")
+  AUTH+=(-H "anthropic-beta: prompt-caching-2024-07-31")
+  req POST "$ENDPOINT" "$CB"; B1="$BODY"; S1="$STATUS"
+  req POST "$ENDPOINT" "$CB"; B2="$BODY"; S2="$STATUS"
+  if [ "${S1:-0}" -ge 200 ] && [ "${S1:-0}" -lt 300 ] && [ "${S2:-0}" -ge 200 ] && [ "${S2:-0}" -lt 300 ]; then
+    if echo "$B2" | grep -qE '"cache_read_input_tokens"[[:space:]]*:[[:space:]]*[1-9]'; then ok "Prompt caching works (cache_read_input_tokens>0 on repeat) -> honest usage + real API."
+    elif echo "$B1$B2" | grep -q 'cache_creation_input_tokens'; then inf "Caching fields present but no read hit on repeat (could be cache timing)."
+    else interposed=1; mid "No prompt-caching fields in usage -> endpoint doesn't implement Anthropic caching (incomplete API / rewritten usage; possible over-billing for cacheable input)."; fi
+  else inf "Inconclusive (HTTP ${S1:-0}/${S2:-0} -- gated/balance)."; fi
+else inf "Prompt-caching check targets the Anthropic API; skipped for OpenAI."; fi
+
 rm -f "$HFILE"
 
 echo; echo "${CYN}=== VERDICT ===${NC}"

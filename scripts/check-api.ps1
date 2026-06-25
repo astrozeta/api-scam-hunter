@@ -235,6 +235,24 @@ if ($Provider -eq 'anthropic') {
   else { $interposed=$true; Mid "Error response does not follow Anthropic's schema -> rewritten error surface. Got: $($res.Content.Substring(0,[Math]::Min(120,$res.Content.Length)))" }
 } else { Inf "Error-schema check targets the Anthropic API; skipped for OpenAI." }
 
+# 8) Prompt caching (billing transparency) ------------------------------------------------
+# The real API supports cache_control: a large cached block shows cache_creation_input_tokens on
+# the first call and cache_read_input_tokens (cheap) on a repeat. A proxy that doesn't implement it
+# omits these -> incomplete API and possible over-billing (you pay full price for cacheable input).
+Write-Host "`n[8] Prompt caching (billing transparency)"
+if ($Provider -eq 'anthropic') {
+  $pad = ("This is a cache-padding sentence used only to exceed the minimum cacheable size. " * 200)
+  $cacheBody = @{ model=$Model; max_tokens=10; system=@(@{type="text"; text=$pad; cache_control=@{type="ephemeral"}}); messages=@(@{role="user";content="say hi"}) } | ConvertTo-Json -Depth 8
+  $Hc = $H.Clone(); $Hc["anthropic-beta"]="prompt-caching-2024-07-31"
+  $r1 = Invoke-Probe 'Post' $endpoint $Hc $cacheBody
+  $r2 = Invoke-Probe 'Post' $endpoint $Hc $cacheBody
+  if (($r1.Status -ge 200 -and $r1.Status -lt 300) -and ($r2.Status -ge 200 -and $r2.Status -lt 300)) {
+    if ($r2.Content -match '"cache_read_input_tokens"\s*:\s*([1-9]\d*)') { Ok "Prompt caching works (cache_read_input_tokens>0 on repeat) -> honest usage + real API." }
+    elseif (($r1.Content -match 'cache_creation_input_tokens') -or ($r2.Content -match 'cache_creation_input_tokens')) { Inf "Caching fields present but no read hit on repeat (could be cache timing)." }
+    else { $interposed=$true; Mid "No prompt-caching fields in usage -> endpoint doesn't implement Anthropic caching (incomplete API / rewritten usage; you may be billed full price for cacheable input)." }
+  } else { Inf "Inconclusive (HTTP $($r1.Status)/$($r2.Status) -- gated/balance)." }
+} else { Inf "Prompt-caching check targets the Anthropic API; skipped for OpenAI." }
+
 # Verdict -----------------------------------------------------------------------------------
 Write-Host "`n=== VERDICT ===" -ForegroundColor Cyan
 if ($malice -ge 1) {

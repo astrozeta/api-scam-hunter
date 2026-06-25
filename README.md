@@ -104,6 +104,9 @@ not the same thing:
    token-inflation), and sends a deliberately invalid request: the real API returns its specific
    error schema (`{"type":"error","error":{"type":"invalid_request_error",...}}`); a proxy that
    makes up its own errors or returns `200` to an invalid body is rewriting the surface.
+8. **Prompt caching (billing transparency)** — sends a large `cache_control` block twice; the real
+   API reports `cache_creation_input_tokens` then `cache_read_input_tokens`. Missing fields mean the
+   proxy doesn't implement caching — you may be billed full price for cacheable input.
 
 Verdict: **any Axis B signal → fraud.** Interposition without malice → "a middleman is in the
 path; if you didn't put it there, it still reads everything." All clean → behaves like a direct,

@@ -87,6 +87,9 @@ your own gateway, Cloudflare or a corp proxy add one too. If the user *declared*
 - **count_tokens + error-schema** — `/v1/messages/count_tokens` coverage (and token-inflation), plus
   a deliberately invalid request: the real API returns `{"type":"error","error":{"type":"invalid_request_error",...}}`;
   a made-up error or a `200` to an invalid body means a rewritten surface.
+- **Prompt caching** — a large `cache_control` block sent twice should report `cache_creation_input_tokens`
+  then `cache_read_input_tokens`; missing fields = no caching implemented = possible over-billing for
+  cacheable input.
 
 **Gate every body check on a 2xx.** A prepaid reseller key often returns `403
 INSUFFICIENT_BALANCE`; a 4xx body has no "BANANA" and no `msg_` id, so judging it as 2xx would
