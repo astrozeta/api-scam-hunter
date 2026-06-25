@@ -156,6 +156,13 @@ single failed probe can be sampling noise, so re-run before concluding a downgra
 endpoint client-gates (returns a stub to scripts), `fingerprint` detects it and routes probes
 through the genuine CLI binary with `-ViaCli` / `VIACLI=1`.
 
+It also runs an **environment / infrastructure probe**: it asks the model for its real OS and
+working directory several times. If the backend OS doesn't match your client's, **your session is
+executing on the proxy's own infrastructure** (not a transparent forward); varying working
+directories reveal a **load-balanced pool of backends** — the tell-tale of resold/pooled (often
+stolen) accounts. *This is a detection no other API checker performs, and it is what unmasked a
+real reseller running a macOS fleet while the client was Windows.*
+
 ## 🌏 The grey market behind it
 
 These cheap endpoints are a known economy — in China, 中转站 ("transfer stations" / shadow

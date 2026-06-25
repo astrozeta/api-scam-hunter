@@ -73,10 +73,13 @@ for m in $PLAN; do
   [ "$m" = "fingerprint" ] && FP_LINE=$(grep '^#APISH fingerprint' "$t" 2>/dev/null || true)
 done
 
-# verdict (FRAUD needs >=2 signals)
-if   [ -z "$CHK_V" ]; then CATE="⚪ INCONCLUSIVE (check-api not run)"; KEY_C=na
-elif [ "$CHK_M" -ge 2 ]; then CATE="🔴 FRAUDULENT BEHAVIOUR"; KEY_C=fraud
-elif [ "$CHK_M" -eq 1 ]; then CATE="🟠 ANOMALIES DETECTED"; KEY_C=anomaly
+# verdict (FRAUD needs >=2 independent behavioural signals: check malice + fingerprint foreign-infra)
+FP_FOREIGN=$(echo "$FP_LINE" | grep -oE 'foreign=[0-9]+' | cut -d= -f2); FP_FOREIGN=${FP_FOREIGN:-0}
+FP_POOL=$(echo "$FP_LINE" | grep -oE 'pool=[0-9]+' | cut -d= -f2); FP_POOL=${FP_POOL:-0}
+SIG=0; [ -n "$CHK_V" ] && SIG=$((SIG+CHK_M)); [ "$FP_FOREIGN" = "1" ] && SIG=$((SIG+1))
+if   [ -z "$CHK_V" ] && [ -z "$FP_LINE" ]; then CATE="⚪ INCONCLUSIVE (no behavioural module run)"; KEY_C=na
+elif [ "$SIG" -ge 2 ]; then CATE="🔴 FRAUDULENT BEHAVIOUR"; KEY_C=fraud
+elif [ "$SIG" -eq 1 ]; then CATE="🟠 ANOMALIES DETECTED"; KEY_C=anomaly
 elif [ "$CHK_I" = "1" ]; then CATE="🟡 UNDECLARED MIDDLEMAN"; KEY_C=middleman
 else CATE="🟢 CLEAN"; KEY_C=clean; fi
 
@@ -98,13 +101,16 @@ STAMP=$(date -u +'%Y-%m-%d %H:%M:%SZ')
   [ -n "$REC_S" ] && echo "| recon (infrastructure) | $REC_S risk signal(s) [context] |"
   if [ -n "$FP_LINE" ]; then
     if echo "$FP_LINE" | grep -q 'gated=1'; then echo "| fingerprint (model) | gated (use VIACLI=1) |"
-    else p=$(echo "$FP_LINE"|grep -oE 'pass=[0-9]+'|cut -d= -f2); tt=$(echo "$FP_LINE"|grep -oE 'tot=[0-9]+'|cut -d= -f2); echo "| fingerprint (model) | ${p}/${tt} reasoning probes passed |"; fi
+    else p=$(echo "$FP_LINE"|grep -oE 'pass=[0-9]+'|cut -d= -f2); tt=$(echo "$FP_LINE"|grep -oE 'tot=[0-9]+'|cut -d= -f2)
+         extra=""; [ "$FP_FOREIGN" = "1" ] && extra="; **runs on foreign infrastructure**"; [ "${FP_POOL:-0}" -gt 1 ] && extra="$extra; pool of $FP_POOL"
+         echo "| fingerprint (model) | ${p}/${tt} reasoning probes passed${extra} |"; fi
   fi
   [ -f "$TRANSDIR/extract.txt" ] && echo "| extract-prompt | transcript captured |"
   echo
-  if [ -f "$TRANSDIR/check.txt" ]; then
+  if [ -f "$TRANSDIR/check.txt" ] || [ "$FP_FOREIGN" = "1" ]; then
     echo "## Why this verdict (behavioural signals)"; echo
-    grep '\[X\]' "$TRANSDIR/check.txt" | sed -E 's/.*\[X\] */- /' || true
+    [ -f "$TRANSDIR/check.txt" ] && { grep '\[X\]' "$TRANSDIR/check.txt" | sed -E 's/.*\[X\] */- /' || true; }
+    [ "$FP_FOREIGN" = "1" ] && echo "- Session executes on the proxy's own infrastructure (backend OS does not match your client OS$([ "${FP_POOL:-0}" -gt 1 ] && echo "; pool of $FP_POOL backend workspaces")) -- not a transparent forward."
     echo
   fi
   echo "## What this analysis CANNOT prove"; echo

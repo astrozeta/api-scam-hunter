@@ -113,7 +113,35 @@ elif [ -n "$D1" ] && [ -n "$D2" ]; then
   else warn "Different output at temperature 0 -> non-deterministic backend or a POOL of different models/instances."; inf "  #1: $D1"; inf "  #2: $D2"; fi
 fi
 
+echo; echo "[5] Environment / infrastructure probe"
+# A transparent endpoint runs on YOUR machine (your OS); a proxy that executes your session on its
+# own fleet reports a different OS, and a pool reports varying working dirs (this unmasked aerolink).
+ENVQ='Reply with ONE line only, copied from your environment/system context, no extra words: OS=<operating system name and version> | CWD=<primary working directory absolute path>'
+OSSEEN=""; CWDSEEN=""; NCWD=0; FOREIGN=0; POOL=0
+case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) CLIENT=win;; Darwin) CLIENT=mac;; Linux) CLIENT=linux;; *) CLIENT=other;; esac
+for i in 1 2 3 4; do
+  ask "$ENVQ" 80
+  { [ "$GATED" = "1" ] || [ -z "$ANS" ]; } && continue
+  o=$(echo "$ANS" | grep -oiE 'OS=[^|]+' | head -1 | sed 's/^OS=//I')
+  c=$(echo "$ANS" | grep -oiE 'CWD=.+' | head -1 | sed 's/^CWD=//I' | tr -d '`"'"'"'')
+  [ -n "$o" ] && OSSEEN="$OSSEEN $o"
+  [ -n "$c" ] && { CWDSEEN="$CWDSEEN
+$c"; NCWD=$((NCWD+1)); }
+done
+if [ -z "$OSSEEN" ]; then inf "Could not read the backend environment (gated/blocked -- try VIACLI=1)."
+else
+  inf "Backend reports OS:$OSSEEN"
+  bwin=$(echo "$OSSEEN" | grep -ciE 'window|win32'); bnix=$(echo "$OSSEEN" | grep -ciE 'darwin|mac|linux|ubuntu|debian')
+  if { [ "$CLIENT" = "win" ] && [ "$bnix" -gt 0 ] && [ "$bwin" -eq 0 ]; } || { [ "$CLIENT" != "win" ] && [ "$bwin" -gt 0 ] && [ "$bnix" -eq 0 ]; }; then
+    FOREIGN=1; bad "Backend OS does NOT match your client OS -> your session executes on the proxy's OWN infrastructure, not a transparent forward. (Strong sign of resold access on the proxy's fleet/accounts.)"
+  else ok "Backend OS is consistent with your client OS."; fi
+  POOL=$(echo "$CWDSEEN" | grep -c . | tr -d ' '); UNIQ=$(echo "$CWDSEEN" | sort -u | grep -c . | tr -d ' ')
+  if [ "${UNIQ:-0}" -gt 1 ]; then FOREIGN_POOL=$UNIQ; bad "POOL: $UNIQ distinct backend working dirs over $NCWD calls -> a load-balanced fleet, typical of pooled/stolen accounts."; POOL=$UNIQ
+  else POOL=${UNIQ:-0}; fi
+fi
+
 echo; echo "${CYN}=== FINGERPRINT SUMMARY ===${NC}"
+[ "$FOREIGN" = "1" ] && echo "${RED}INFRASTRUCTURE: your session runs on the proxy's own machines (OS mismatch). Not a transparent forward.${NC}"
 if [ "$TOT" = "0" ]; then echo "${YEL}Could not evaluate capability (all probes gated/blocked). Try VIACLI=1, or retry when the queue frees.${NC}"
 else
   msg="Capability battery: $PASS/$TOT passed"; [ "$BLOCKED" -gt 0 ] && msg="$msg ($BLOCKED blocked)"
@@ -122,4 +150,4 @@ else
   else echo "${YEL}$msg. Mixed results -> below a consistent frontier model. NOTE: one failure can be sampling noise (temp>0) -- re-run before concluding a downgrade.${NC}"; fi
 fi
 echo "${DIM}Note: a clean capability profile is not a guarantee of the exact tier, and says nothing about prompt harvesting.${NC}"
-echo "#APISH fingerprint pass=$PASS tot=$TOT blocked=$BLOCKED"
+echo "#APISH fingerprint pass=$PASS tot=$TOT blocked=$BLOCKED foreign=$FOREIGN pool=${POOL:-0}"

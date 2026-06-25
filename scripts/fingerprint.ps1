@@ -129,8 +129,39 @@ elseif ($d1.text -and $d2.text) {
 Write-Host "`n[4] Latency"
 if (-not $c.gated -and $c.ms) { Inf "Baseline ~$($c.ms) ms. (With -ViaCli this includes CLI startup, so it's not a clean TTFT.)" }
 
+# 5) Environment / infrastructure probe ----------------------------------------------------
+# Asks the model for its REAL execution environment several times. A transparent endpoint runs
+# on YOUR machine (your OS); a proxy that executes your session on its own fleet reports a
+# different OS, and a load-balanced pool reports varying working directories. (This is what
+# unmasked aerolink: it reported macOS workspaces while the client was Windows.)
+Write-Host "`n[5] Environment / infrastructure probe"
+$envQ = "Reply with ONE line only, copied from your environment/system context, no extra words: OS=<operating system name and version> | CWD=<primary working directory absolute path>"
+$osSeen=@(); $cwdSeen=@(); $foreignInfra=$false; $poolSize=0
+for ($i=0; $i -lt 4; $i++) {
+  $a = Ask $envQ 80
+  if ($a.gated -or -not $a.text) { continue }
+  if ($a.text -match 'OS\s*=\s*([^|]+)')  { $osSeen  += $Matches[1].Trim() }
+  if ($a.text -match 'CWD\s*=\s*(.+)')     { $cwdSeen += ($Matches[1].Trim() -replace '[`"'']','') }
+}
+if ($osSeen.Count -eq 0) { Inf "Could not read the backend environment (gated/blocked -- try -ViaCli)." }
+else {
+  Inf "Backend reports OS: $((($osSeen | Sort-Object -Unique) -join ' ; '))"
+  $clientIsWin = "$([System.Environment]::OSVersion.Platform)" -match 'Win'
+  $backendWin  = @($osSeen | Where-Object { $_ -match 'window|win32' }).Count
+  $backendNix  = @($osSeen | Where-Object { $_ -match 'darwin|mac|linux|ubuntu|debian' }).Count
+  if (($clientIsWin -and $backendNix -gt 0 -and $backendWin -eq 0) -or (-not $clientIsWin -and $backendWin -gt 0 -and $backendNix -eq 0)) {
+    $foreignInfra = $true
+    Bad "Backend OS does NOT match your client OS -> your session executes on the proxy's OWN infrastructure, it is not transparently forwarding. (Strong sign of resold access on the proxy's fleet/accounts.)"
+  } else { Ok "Backend OS is consistent with your client OS." }
+  $cwdUnique = @($cwdSeen | Sort-Object -Unique)
+  $poolSize = $cwdUnique.Count
+  if ($poolSize -gt 1) { Bad "POOL: $poolSize distinct backend working dirs over $($cwdSeen.Count) calls ($((($cwdUnique | Select-Object -First 4) -join ', '))) -> a load-balanced fleet of backends, typical of pooled/stolen accounts." }
+  elseif ($poolSize -eq 1 -and $cwdSeen.Count -gt 1) { Inf "Stable working dir: $($cwdUnique[0])" }
+}
+
 # Summary ----------------------------------------------------------------------------------
 Write-Host "`n=== FINGERPRINT SUMMARY ===" -ForegroundColor Cyan
+if ($foreignInfra) { Write-Host "INFRASTRUCTURE: your session runs on the proxy's own machines (OS mismatch$(if($poolSize -gt 1){"; pool of $poolSize backends"})). Not a transparent forward." -ForegroundColor Red }
 if ($tot -eq 0) {
   Write-Host "Could not evaluate capability (all probes gated/blocked). Try -ViaCli, or retry when the queue frees up." -ForegroundColor Yellow
 } else {
@@ -140,4 +171,4 @@ if ($tot -eq 0) {
   else { Write-Host "Mixed results -> below a consistent frontier model. NOTE: one failure can be sampling noise (temp>0) -- re-run before concluding a downgrade." -ForegroundColor Yellow }
 }
 Write-Host "Note: a clean capability profile is not a guarantee of the exact tier, and says nothing about prompt harvesting." -ForegroundColor DarkGray
-Write-Host "#APISH fingerprint pass=$pass tot=$tot blocked=$blocked"
+Write-Host "#APISH fingerprint pass=$pass tot=$tot blocked=$blocked foreign=$([int][bool]$foreignInfra) pool=$poolSize"

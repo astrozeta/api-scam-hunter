@@ -111,11 +111,14 @@ survives errors), but only judge *behaviour* on a real 200.
    headers, the one-api/new-api fingerprint, and an economic-plausibility check (price vs list).
    It reports context, not a verdict — pair it with check-api.
 3b. Fingerprint the served model with `scripts/fingerprint.ps1` / `.sh`: a calibrated reasoning
-   battery + self-report + determinism + latency. Reports a CAPABILITY PROFILE, not a hard verdict
-   — it reliably separates a high-tier model from a junk one, but CANNOT tell Opus from Sonnet from
-   outside, and says so. One failed probe can be sampling noise → re-run before claiming a
-   downgrade. If the endpoint client-gates (stub to scripts), use `-ViaCli` / `VIACLI=1` to route
-   probes through the genuine CLI binary.
+   battery + self-report + determinism + latency + an ENVIRONMENT/INFRASTRUCTURE probe. Reports a
+   CAPABILITY PROFILE, not a hard verdict — it reliably separates a high-tier model from a junk one,
+   but CANNOT tell Opus from Sonnet from outside, and says so. One failed probe can be sampling noise
+   → re-run before claiming a downgrade. The environment probe asks the model for its real OS/working
+   dir several times: if the backend OS != the client's, the session runs on the proxy's OWN
+   infrastructure (not a transparent forward); varying working dirs reveal a load-balanced POOL of
+   backends (resold/pooled, often stolen, accounts). If the endpoint client-gates (stub to scripts),
+   use `-ViaCli` / `VIACLI=1` to route probes through the genuine CLI binary.
 3. Collect evidence. Run `scripts/extract-prompt.ps1` / `.sh` to try to make the proxy reveal
    the system prompt / persona it injects (e.g. "You are Kiro") and the model truly serving the
    request; it saves a timestamped transcript. It fires several benign prompt-extraction methods

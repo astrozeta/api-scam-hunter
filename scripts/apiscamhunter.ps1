@@ -81,8 +81,9 @@ foreach ($m in $plan) {
   }
   if ($m -eq 'recon' -and $t -match '#APISH recon signals=(\d+)') { $rec = @{ signals=[int]$Matches[1] } }
   if ($m -eq 'fingerprint') {
-    if ($t -match '#APISH fingerprint gated=1') { $fp = @{ gated=1 } }
-    elseif ($t -match '#APISH fingerprint pass=(\d+) tot=(\d+) blocked=(\d+)') { $fp = @{ gated=0; pass=[int]$Matches[1]; tot=[int]$Matches[2]; blocked=[int]$Matches[3] } }
+    if ($t -match '#APISH fingerprint gated=1') { $fp = @{ gated=1; foreign=0; pool=0 } }
+    elseif ($t -match '#APISH fingerprint pass=(\d+) tot=(\d+) blocked=(\d+) foreign=(\d+) pool=(\d+)') { $fp = @{ gated=0; pass=[int]$Matches[1]; tot=[int]$Matches[2]; blocked=[int]$Matches[3]; foreign=[int]$Matches[4]; pool=[int]$Matches[5] } }
+    elseif ($t -match '#APISH fingerprint pass=(\d+) tot=(\d+) blocked=(\d+)') { $fp = @{ gated=0; pass=[int]$Matches[1]; tot=[int]$Matches[2]; blocked=[int]$Matches[3]; foreign=0; pool=0 } }
   }
   # early-exit: if behaviour is already fraudulent (2+ signals), skip the expensive fingerprint
   if ($m -eq 'check' -and $chk -and $chk.malice -ge 2 -and $level -eq 'Full') {
@@ -93,17 +94,22 @@ foreach ($m in $plan) {
 
 # ---- verdict (5 categories; FRAUD needs >=2 independent signals) --------------------------
 $cat="$E_GREEN CLEAN"; $catKey='clean'; $why=@()
-if ($chk) {
-  if     ($chk.malice -ge 2) { $cat="$E_RED FRAUDULENT BEHAVIOUR"; $catKey='fraud' }
-  elseif ($chk.malice -eq 1) { $cat="$E_ORANGE ANOMALIES DETECTED";   $catKey='anomaly' }
-  elseif ($chk.interposed)   { $cat="$E_YELLOW UNDECLARED MIDDLEMAN"; $catKey='middleman' }
-  else                       { $cat="$E_GREEN CLEAN";               $catKey='clean' }
-} else { $cat="$E_WHITE INCONCLUSIVE (check-api not run)"; $catKey='na' }
+# count independent behavioural signals: check-api malice + fingerprint's foreign-infrastructure
+$sig = 0
+if ($chk) { $sig += $chk.malice }
+if ($fp -and $fp.foreign) { $sig += 1 }
+$interp = ($chk -and $chk.interposed)
+if (-not $chk -and -not $fp) { $cat="$E_WHITE INCONCLUSIVE (no behavioural module run)"; $catKey='na' }
+elseif ($sig -ge 2)          { $cat="$E_RED FRAUDULENT BEHAVIOUR"; $catKey='fraud' }
+elseif ($sig -eq 1)          { $cat="$E_ORANGE ANOMALIES DETECTED"; $catKey='anomaly' }
+elseif ($interp)             { $cat="$E_YELLOW UNDECLARED MIDDLEMAN"; $catKey='middleman' }
+else                         { $cat="$E_GREEN CLEAN"; $catKey='clean' }
 
 # pull the behavioural signals (the [X] lines) from the check transcript for the "why"
 if ($transcripts['check']) {
   $why = ($transcripts['check'] -split "`n") | Where-Object { $_ -match '\[X\]' } | ForEach-Object { ($_ -replace '.*\[X\]\s*','').Trim() }
 }
+if ($fp -and $fp.foreign) { $why += ("Session executes on the proxy's own infrastructure (backend OS does not match your client OS" + $(if($fp.pool -gt 1){"; pool of $($fp.pool) backend workspaces"}) + ") -- not a transparent forward.") }
 
 Write-Host "`n###############################################" -ForegroundColor Cyan
 Write-Host "#  VERDICT: $cat" -ForegroundColor $(switch($catKey){'fraud'{'Red'}'anomaly'{'Yellow'}'middleman'{'Yellow'}default{'Green'}})
@@ -126,7 +132,7 @@ $md.Add("| Module | Result |")
 $md.Add("|--------|--------|")
 if ($chk) { $md.Add("| check-api (behaviour) | **$($chk.verdict)** -- $($chk.malice) malicious signal(s), interposed=$($chk.interposed) |") }
 if ($rec) { $md.Add("| recon (infrastructure) | $($rec.signals) risk signal(s) [context] |") }
-if ($fp)  { if ($fp.gated) { $md.Add("| fingerprint (model) | gated (use -ViaCli) |") } else { $md.Add("| fingerprint (model) | $($fp.pass)/$($fp.tot) reasoning probes passed |") } }
+if ($fp)  { if ($fp.gated) { $md.Add("| fingerprint (model) | gated (use -ViaCli) |") } else { $md.Add("| fingerprint (model) | $($fp.pass)/$($fp.tot) reasoning probes passed$(if($fp.foreign){"; **runs on foreign infrastructure**"})$(if($fp.pool -gt 1){"; pool of $($fp.pool)"}) |") } }
 if ($plan -contains 'extract') { $md.Add("| extract-prompt | transcript saved (see evidence file) |") }
 $md.Add("")
 if ($why.Count -gt 0) {
@@ -166,7 +172,7 @@ $catColor = switch($catKey){'fraud'{'#ff5a52'}'anomaly'{'#febc2e'}'middleman'{'#
 $rowsHtml = ""
 if ($chk) { $rowsHtml += "<tr><td>check-api (behaviour)</td><td><b>$($chk.verdict)</b> -$($chk.malice) signal(s), interposed=$($chk.interposed)</td></tr>" }
 if ($rec) { $rowsHtml += "<tr><td>recon (infrastructure)</td><td>$($rec.signals) risk signal(s) [context]</td></tr>" }
-if ($fp)  { $rowsHtml += "<tr><td>fingerprint (model)</td><td>$(if($fp.gated){'gated (use -ViaCli)'}else{"$($fp.pass)/$($fp.tot) reasoning probes passed"})</td></tr>" }
+if ($fp)  { $rowsHtml += "<tr><td>fingerprint (model)</td><td>$(if($fp.gated){'gated (use -ViaCli)'}else{"$($fp.pass)/$($fp.tot) reasoning probes passed$(if($fp.foreign){' &mdash; runs on FOREIGN infrastructure'})$(if($fp.pool -gt 1){"; pool of $($fp.pool)"})"})</td></tr>" }
 Add-Type -AssemblyName System.Web -ErrorAction SilentlyContinue
 $whyHtml = if ($why.Count){ "<h2>Why this verdict</h2><ul>" + (($why | ForEach-Object { "<li>$([System.Web.HttpUtility]::HtmlEncode($_))" }) -join '') + "</ul>" } else { "" }
 $transHtml = ""
