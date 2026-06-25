@@ -108,6 +108,26 @@ official-format key. Never route code, secrets or personal data through a "cheap
 > reads, edits and degrades your traffic**, with no guarantee they keep serving the real
 > model tomorrow. **Never send secrets through such an endpoint.**
 
+## 🧬 Fingerprint the model actually served
+
+`fingerprint` profiles the model behind the endpoint with a small battery of calibrated
+reasoning prompts, plus self-report, determinism and latency:
+
+```powershell
+./scripts/fingerprint.ps1 -BaseUrl "https://endpoint" -ApiKey "sk-..." -Model claude-opus-4-8
+./scripts/fingerprint.ps1 -BaseUrl "https://endpoint" -ApiKey "sk-..." -ViaCli   # gated proxies
+```
+```bash
+./scripts/fingerprint.sh https://endpoint sk-... claude-opus-4-8
+VIACLI=1 ./scripts/fingerprint.sh https://endpoint sk-...
+```
+
+It reports a **capability profile, not a hard verdict**: telling a high-tier model from a junk
+one is reliable; telling Opus from Sonnet from the outside is **not** — and the tool says so. A
+single failed probe can be sampling noise, so re-run before concluding a downgrade. If the
+endpoint client-gates (returns a stub to scripts), `fingerprint` detects it and routes probes
+through the genuine CLI binary with `-ViaCli` / `VIACLI=1`.
+
 ## 🌏 The grey market behind it
 
 These cheap endpoints are a known economy — in China, 中转站 ("transfer stations" / shadow
