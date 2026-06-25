@@ -151,12 +151,19 @@ if ($osSeen.Count -eq 0) { Inf "Could not read the backend environment (gated/bl
 else {
   Inf "Backend reports OS: $((($osSeen | Sort-Object -Unique) -join ' ; '))"
   $clientIsWin = "$([System.Environment]::OSVersion.Platform)" -match 'Win'
-  $backendWin  = @($osSeen | Where-Object { $_ -match 'window|win32' }).Count
-  $backendNix  = @($osSeen | Where-Object { $_ -match 'darwin|mac|linux|ubuntu|debian' }).Count
-  if (($clientIsWin -and $backendNix -gt 0 -and $backendWin -eq 0) -or (-not $clientIsWin -and $backendWin -gt 0 -and $backendNix -eq 0)) {
+  # ANY single call reporting a foreign OS or a foreign-format path is enough: your legit session
+  # always runs on your own OS. A mix (some your OS, some not) is a heterogeneous pool -- the proxy
+  # forwards some requests and runs others on its own fleet. (aerolink does exactly this.)
+  $alienOS  = if ($clientIsWin) { @($osSeen | Where-Object { $_ -match 'darwin|mac|linux|ubuntu|debian' }) } else { @($osSeen | Where-Object { $_ -match 'window|win32' }) }
+  $alienCwd = if ($clientIsWin) { @($cwdSeen | Where-Object { $_ -match '^/' }) } else { @($cwdSeen | Where-Object { $_ -match '^[A-Za-z]:' }) }
+  $distinctOS = @($osSeen | Sort-Object -Unique).Count
+  if ($alienOS.Count -gt 0 -or $alienCwd.Count -gt 0) {
     $foreignInfra = $true
-    Bad "Backend OS does NOT match your client OS -> your session executes on the proxy's OWN infrastructure, it is not transparently forwarding. (Strong sign of resold access on the proxy's fleet/accounts.)"
-  } else { Ok "Backend OS is consistent with your client OS." }
+    Bad "At least one backend reports a different OS/path than your machine -> some requests run on the proxy's OWN infrastructure (heterogeneous pool: some forwarded, some run on its fleet). Re-run a few times -- a single run can land entirely on transparent backends."
+  } elseif ($distinctOS -gt 1) {
+    $foreignInfra = $true
+    Bad "Inconsistent OS across calls ($distinctOS different) -> a heterogeneous backend pool, not one transparent endpoint."
+  } else { Ok "Backend OS consistent with your client across all calls (this run; a heterogeneous pool may still appear on a re-run)." }
   $cwdUnique = @($cwdSeen | Sort-Object -Unique)
   $poolSize = $cwdUnique.Count
   if ($poolSize -gt 1) { Bad "POOL: $poolSize distinct backend working dirs over $($cwdSeen.Count) calls ($((($cwdUnique | Select-Object -First 4) -join ', '))) -> a load-balanced fleet of backends, typical of pooled/stolen accounts." }

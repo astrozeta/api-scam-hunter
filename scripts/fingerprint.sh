@@ -141,9 +141,13 @@ if [ -z "$OSSEEN" ]; then inf "Could not read the backend environment (gated/blo
 else
   inf "Backend reports OS:$OSSEEN"
   bwin=$(echo "$OSSEEN" | grep -ciE 'window|win32'); bnix=$(echo "$OSSEEN" | grep -ciE 'darwin|mac|linux|ubuntu|debian')
-  if { [ "$CLIENT" = "win" ] && [ "$bnix" -gt 0 ] && [ "$bwin" -eq 0 ]; } || { [ "$CLIENT" != "win" ] && [ "$bwin" -gt 0 ] && [ "$bnix" -eq 0 ]; }; then
-    FOREIGN=1; bad "Backend OS does NOT match your client OS -> your session executes on the proxy's OWN infrastructure, not a transparent forward. (Strong sign of resold access on the proxy's fleet/accounts.)"
-  else ok "Backend OS is consistent with your client OS."; fi
+  # ANY single foreign OS/path is enough; a mix (some yours, some not) is a heterogeneous pool.
+  if [ "$CLIENT" = "win" ]; then alien=$bnix; aliencwd=$(echo "$CWDSEEN" | grep -c '^/'); else alien=$bwin; aliencwd=$(echo "$CWDSEEN" | grep -cE '^[A-Za-z]:'); fi
+  if [ "${alien:-0}" -gt 0 ] || [ "${aliencwd:-0}" -gt 0 ]; then
+    FOREIGN=1; bad "At least one backend reports a different OS/path than your machine -> some requests run on the proxy's OWN infrastructure (heterogeneous pool: some forwarded, some on its fleet). Re-run a few times -- a single run can land entirely on transparent backends."
+  elif [ "$bwin" -gt 0 ] && [ "$bnix" -gt 0 ]; then
+    FOREIGN=1; bad "Inconsistent OS across calls -> a heterogeneous backend pool, not one transparent endpoint."
+  else ok "Backend OS consistent with your client across all calls (this run; a heterogeneous pool may still appear on a re-run)."; fi
   POOL=$(echo "$CWDSEEN" | grep -c . | tr -d ' '); UNIQ=$(echo "$CWDSEEN" | sort -u | grep -c . | tr -d ' ')
   if [ "${UNIQ:-0}" -gt 1 ]; then FOREIGN_POOL=$UNIQ; bad "POOL: $UNIQ distinct backend working dirs over $NCWD calls -> a load-balanced fleet, typical of pooled/stolen accounts."; POOL=$UNIQ
   else POOL=${UNIQ:-0}; fi
