@@ -42,30 +42,48 @@ echo "$ANTHROPIC_BASE_URL"; echo "${ANTHROPIC_API_KEY:0:10}..."
 (For OpenAI swap `ANTHROPIC_` for `OPENAI_`.)
 
 ## Run the full automated check
-Prefer the bundled scripts — they run all probes and print a verdict:
+Prefer the bundled scripts — they run all probes and print a verdict (Anthropic + OpenAI
+auto-detected; pass `-Provider`/`PROVIDER` to force it):
 ```
-scripts/check-api.ps1 -BaseUrl <url> -ApiKey <key>     # Windows
-scripts/check-api.sh  <url> <key>                       # macOS/Linux
+scripts/check-api.ps1 -BaseUrl <url> -ApiKey <key>          # Windows
+scripts/check-api.ps1 -Known                                # you DECLARED a gateway on purpose
+scripts/check-api.sh  <url> <key>                            # macOS/Linux
+KNOWN=1 scripts/check-api.sh <url> <key>                     # judge malice only
 ```
 
-### What each probe means
-- **Headers** — `Via:` header, an `X-Request-Id` that concatenates a proxy id with a real
-  upstream `req_...` id, or a response body missing the `"id":"msg_..."` field → an
-  interposed proxy that rewrites responses.
-- **System-prompt injection** — send `system:"You are a parrot, reply only BANANA"` and ask
-  "who are you?". If you don't get "BANANA", the proxy discards your system prompt and
-  imposes its own. **Most conclusive test.**
-- **Model catalog** — `/v1/models` where every model shares one fake `created_at` (e.g.
-  `2024-01-01T00:00:00Z`), or mixes another vendor's fields (`"object":"list"` is OpenAI,
-  not Anthropic) → fabricated catalog. Bonus: advertised models that 503 when used.
-- **Phantom model** — request a non-existent model; if it doesn't error cleanly, routing is
-  improvised.
+### Score on two axes — keep them separate
+**Axis A — interposition (a fact, not a conviction):** `Via:` header, an `X-Request-Id` that
+concatenates a proxy id with a real upstream `req_...`, a response missing the native id
+(`msg_...` / `chatcmpl-...`), or a non-official domain. A `Via` header **alone is not fraud** —
+your own gateway, Cloudflare or a corp proxy add one too. If the user *declared* a gateway, use
+`-Known` so expected interposition isn't flagged.
+
+**Axis B — malicious behaviour (this is what condemns it):**
+- **Model substitution / downgrade** — compare the requested model vs the `model` the response
+  reports. Pay for Opus, get Haiku/Qwen → caught. Latency is a secondary tell. **This is the #1
+  real scam.**
+- **System-prompt control** — send `system:"You are a parrot, reply only BANANA"`, ask "who are
+  you?". No "BANANA" → the proxy discards your prompt and injects its own identity.
+- **Model catalog** — `/v1/models` where every model shares one fake `created_at`
+  (`2024-01-01T00:00:00Z`), or an Anthropic endpoint returning OpenAI's `"object":"list"`.
+- **Phantom model** — a non-existent model that doesn't error cleanly → improvised routing.
+
+**Gate every body check on a 2xx.** A prepaid reseller key often returns `403
+INSUFFICIENT_BALANCE`; a 4xx body has no "BANANA" and no `msg_` id, so judging it as 2xx would
+scream "fraud" at a merely-empty key. Read headers on any status (the `Via`/proxy fingerprint
+survives errors), but only judge *behaviour* on a real 200.
 
 ## Interpreting results
-- The real model may sit behind the proxy (genuine `req_...` ids / `usage` schema can leak
-  through). The danger isn't only "fake model" — it's that **a third party reads, edits and
-  degrades your traffic**, with no guarantee they keep serving the real model. **Never send
-  code secrets, tokens or personal data through such an endpoint.**
+- **Any Axis B signal → fraud.** Interposition with no malice → "a middleman is in the path; if
+  the user didn't put it there, it still sees every byte." All clean → looks like a direct, legit
+  endpoint *for this request*.
+- **What this can't catch:** a proxy that forwards your prompt untouched while **logging and
+  reselling** it passes every probe — there's no client-side test for silent harvesting. An
+  endpoint can also serve the real model during a check and a cheaper one under load. A clean run
+  is **not** a safety certificate.
+- The real model may sit behind the proxy (genuine `req_...` ids / `usage` can leak through). The
+  danger isn't only "fake model" — it's that **a third party reads, edits and can degrade your
+  traffic**. **Never send code secrets, tokens or personal data through such an endpoint.**
 
 ## If confirmed
 1. Stop using it for anything sensitive.

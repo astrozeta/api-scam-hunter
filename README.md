@@ -33,21 +33,55 @@ If any column on the right matches, run the full check below.
 **Windows (PowerShell):**
 ```powershell
 ./scripts/check-api.ps1 -BaseUrl "https://the-endpoint.com" -ApiKey "sk-..."
+./scripts/check-api.ps1 -Provider openai -BaseUrl "https://cheap-gpt.example" -ApiKey "sk-..."
+./scripts/check-api.ps1 -Known     # you DO use a gateway on purpose (OpenRouter / your LiteLLM)
 ```
 
 **macOS / Linux (bash, needs `curl`):**
 ```bash
 ./scripts/check-api.sh https://the-endpoint.com sk-...
+PROVIDER=openai ./scripts/check-api.sh https://cheap-gpt.example sk-...
+KNOWN=1 ./scripts/check-api.sh https://your-gateway sk-...
 ```
 
-The script runs four probes and prints a verdict:
-1. **Header inspection** — detects an interposed proxy (`Via:`, duplicated request-ids, a
-   stripped message `id`).
-2. **System-prompt injection test** — sends a throwaway system prompt and checks whether the
-   endpoint honors it or overrides it with its own.
-3. **Model catalog audit** — flags fabricated `/v1/models` listings (identical fake
-   `created_at`, mismatched schema fields).
-4. **Phantom-model routing** — requests a non-existent model to expose improvised routing.
+Anthropic and OpenAI are auto-detected (override with `-Provider` / `PROVIDER`). The verdict is
+scored on **two separate axes**, because "there's a proxy" and "the proxy is robbing you" are
+not the same thing:
+
+**Axis A — is a third party interposed?** (a *fact*, not a conviction)
+- `Via:` header, an `X-Request-Id` that concatenates a proxy id with a real upstream `req_...`,
+  a response missing the native `id` (`msg_...` / `chatcmpl-...`), or a non-official domain.
+- A `Via` header alone is **not** proof of fraud — your own gateway, Cloudflare or a corporate
+  proxy add one too. Run with `-Known` and the tool stops treating expected interposition as bad.
+
+**Axis B — is it behaving maliciously?** (this is what actually condemns it)
+1. **Model substitution / downgrade** — compares the model you *requested* with the `model` the
+   response *reports*. Pay for Opus, get Haiku/Qwen → caught. (Plus a latency read: a tiny model
+   is suspiciously fast.) *This is the #1 scam and what most "detectors" miss.*
+2. **System-prompt control** — sends a throwaway system prompt and checks the endpoint honors it
+   instead of injecting its own identity ("Kiro", etc.).
+3. **Model catalog audit** — flags fabricated `/v1/models` (identical fake `created_at`;
+   OpenAI-style `object:list` on an endpoint claiming to be Anthropic).
+4. **Phantom-model routing** — requests a non-existent model; a real API rejects it cleanly.
+
+Verdict: **any Axis B signal → fraud.** Interposition without malice → "a middleman is in the
+path; if you didn't put it there, it still reads everything." All clean → behaves like a direct,
+legitimate endpoint.
+
+## 🕳️ What this *can't* catch (and why the golden rule still wins)
+
+Be honest about the limits — a tool that overclaims is worse than none:
+
+- **Silent harvesting.** A proxy can forward your prompt **untouched** to the real model and
+  still log and resell every byte. It would pass the system-prompt test and the model check.
+  There is no client-side probe for "someone is quietly copying my traffic."
+- **On-demand swap.** An endpoint can serve the real model during a check and a cheaper one
+  under load, or only for some accounts.
+- **A passing score is not a safety certificate** — it only means *these specific tricks*
+  weren't caught on *this* request.
+
+That's exactly why the rule is: **legit access goes to the official domain with an
+official-format key. Never route code, secrets or personal data through a "cheaper BASE_URL."**
 
 ## 🔬 What a fraudulent proxy looks like (real case: `aiapiflow.com`)
 
