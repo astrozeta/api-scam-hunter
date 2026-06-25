@@ -161,6 +161,16 @@ if [ "$PROVIDER" = "anthropic" ]; then
   else interposed=1; mid "Stream request returned neither a valid SSE sequence nor a real message (stub/rewritten body)."; fi
 else inf "Streaming check targets the Anthropic SSE schema; skipped for OpenAI."; fi
 
+echo; echo "[6] Token-count endpoint (/v1/messages/count_tokens)"
+if [ "$PROVIDER" = "anthropic" ]; then
+  req POST "$BASE/v1/messages/count_tokens" "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"The quick brown fox jumps over the lazy dog.\"}]}"
+  if is2xx && echo "$BODY" | grep -qE '"input_tokens"[[:space:]]*:[[:space:]]*[0-9]+'; then
+    it=$(echo "$BODY" | grep -oE '"input_tokens"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | head -1)
+    if [ "${it:-0}" -ge 5 ] && [ "${it:-0}" -le 40 ]; then ok "count_tokens works and returns a plausible count ($it for a 9-word sentence)."
+    else bad "count_tokens returned an implausible count ($it for a 9-word sentence) -> possible token inflation (over-billing)."; fi
+  else interposed=1; mid "count_tokens endpoint missing or non-conformant (the real Anthropic API implements it) -> incomplete/rewritten API surface."; fi
+else inf "count_tokens check targets the Anthropic API; skipped for OpenAI."; fi
+
 rm -f "$HFILE"
 
 echo; echo "${CYN}=== VERDICT ===${NC}"

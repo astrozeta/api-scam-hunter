@@ -208,6 +208,19 @@ if ($Provider -eq 'anthropic') {
   } else { Inf "Inconclusive (HTTP $($res.Status) -- likely auth/balance/gating)." }
 } else { Inf "Streaming check targets the Anthropic SSE schema; skipped for OpenAI." }
 
+# 6) Token-count endpoint (billing transparency / API coverage) ----------------------------
+Write-Host "`n[6] Token-count endpoint (/v1/messages/count_tokens)"
+if ($Provider -eq 'anthropic') {
+  $cb = @{ model=$Model; messages=@(@{role="user";content="The quick brown fox jumps over the lazy dog."}) } | ConvertTo-Json -Depth 5
+  $res = Invoke-Probe 'Post' "$BaseUrl/v1/messages/count_tokens" $H $cb
+  if (-not $res.Reached) { Inf "Skipped (unreachable)." }
+  elseif (($res.Status -ge 200 -and $res.Status -lt 300) -and ($res.Content -match '"input_tokens"\s*:\s*(\d+)')) {
+    $it=[int]$Matches[1]
+    if ($it -ge 5 -and $it -le 40) { Ok "count_tokens works and returns a plausible count ($it for a 9-word sentence)." }
+    else { Bad "count_tokens returned an implausible count ($it for a 9-word sentence) -> possible token inflation (over-billing)." }
+  } else { $interposed=$true; Mid "count_tokens endpoint missing or non-conformant (the real Anthropic API implements it) -> incomplete/rewritten API surface." }
+} else { Inf "count_tokens check targets the Anthropic API; skipped for OpenAI." }
+
 # Verdict -----------------------------------------------------------------------------------
 Write-Host "`n=== VERDICT ===" -ForegroundColor Cyan
 if ($malice -ge 1) {

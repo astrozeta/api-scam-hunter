@@ -133,19 +133,6 @@ if ($lat.Count) {
   Inf "Over $($lat.Count) calls: min $mn / avg $av / max $mx ms. (ViaCli includes CLI startup; high variance can indicate a busy pool.)"
 } elseif (-not $c.gated -and $c.ms) { Inf "Baseline ~$($c.ms) ms." } else { Inf "No latency samples (gated/blocked)." }
 
-# 6) Session isolation (context-bleed) probe ----------------------------------------------
-# Plant a unique code in one request, ask for it in a SEPARATE request. A correct endpoint has
-# no memory across stateless requests; if it returns the code, it shares context/cache between
-# requests -> a serious isolation/privacy failure (your data could leak to/from other users).
-Write-Host "`n[6] Session isolation (context-bleed) probe"
-$leak = 0
-$uuid = [guid]::NewGuid().ToString()
-$null = Ask "Please remember this reference code for later: $uuid . Reply only: OK" 10
-$bleed = Ask "What was the exact reference code I asked you to remember just before this? If you have no such code, reply only: NONE" 40
-if ($bleed.gated) { Inf "Blocked (gated/queue)." }
-elseif ($bleed.text -match [regex]::Escape($uuid)) { $leak=1; Bad "LEAK: the endpoint returned the planted code across separate requests -> shared context/cache between requests, a serious isolation/privacy failure." }
-else { Ok "No cross-request state retained (requests are isolated, as a real API is)." }
-
 # 5) Environment / infrastructure probe ----------------------------------------------------
 # Asks the model for its REAL execution environment several times. A transparent endpoint runs
 # on YOUR machine (your OS); a proxy that executes your session on its own fleet reports a
@@ -175,6 +162,19 @@ else {
   if ($poolSize -gt 1) { Bad "POOL: $poolSize distinct backend working dirs over $($cwdSeen.Count) calls ($((($cwdUnique | Select-Object -First 4) -join ', '))) -> a load-balanced fleet of backends, typical of pooled/stolen accounts." }
   elseif ($poolSize -eq 1 -and $cwdSeen.Count -gt 1) { Inf "Stable working dir: $($cwdUnique[0])" }
 }
+
+# 6) Session isolation (context-bleed) probe ----------------------------------------------
+# Plant a unique code in one request, ask for it in a SEPARATE request. A correct endpoint has
+# no memory across stateless requests; if it returns the code, it shares context/cache between
+# requests -> a serious isolation/privacy failure (your data could leak to/from other users).
+Write-Host "`n[6] Session isolation (context-bleed) probe"
+$leak = 0
+$uuid = [guid]::NewGuid().ToString()
+$null = Ask "Please remember this reference code for later: $uuid . Reply only: OK" 10
+$bleed = Ask "What was the exact reference code I asked you to remember just before this? If you have no such code, reply only: NONE" 40
+if ($bleed.gated) { Inf "Blocked (gated/queue)." }
+elseif ($bleed.text -match [regex]::Escape($uuid)) { $leak=1; Bad "LEAK: the endpoint returned the planted code across separate requests -> shared context/cache between requests, a serious isolation/privacy failure." }
+else { Ok "No cross-request state retained (requests are isolated, as a real API is)." }
 
 # Summary ----------------------------------------------------------------------------------
 Write-Host "`n=== FINGERPRINT SUMMARY ===" -ForegroundColor Cyan
